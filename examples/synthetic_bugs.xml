@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- СИНТЕТИЧЕСКАЯ фикстура (не заказчик): нарочно внесённые типовые баги, чтобы
+     (1) покрыть снапшотом ветки, которых нет в реальных экспортах (категории implicit-check),
+     (2) держать «спящие» баг-правила под тестом и мерить recall. Безопасно для git. -->
+<project xmlns="http://www.plcopen.org/xml/tc6_0200">
+  <types>
+    <pous>
+      <pou name="CheckBounds" pouType="function">
+        <interface>
+          <localVars><variable name="x"><type><INT/></type></variable></localVars>
+        </interface>
+        <body>
+          <ST><xhtml xmlns="http://www.w3.org/1999/xhtml">x := 1;</xhtml></ST>
+          <addData><data name="cf"><CheckFunction>CheckBounds</CheckFunction></data></addData>
+        </body>
+      </pou>
+      <pou name="DivZeroVar" pouType="program">
+        <interface>
+          <localVars>
+            <variable name="znever"><type><INT/></type></variable>
+            <variable name="zcond"><type><INT/></type></variable>
+            <variable name="qa"><type><INT/></type></variable>
+            <variable name="qb"><type><INT/></type></variable>
+            <variable name="cond"><type><BOOL/></type></variable>
+          </localVars>
+        </interface>
+        <body>
+          <ST><xhtml xmlns="http://www.w3.org/1999/xhtml">qa := 5 / znever;
+IF cond THEN zcond := 0; ELSE zcond := 2; END_IF
+qb := 5 / zcond;</xhtml></ST>
+        </body>
+      </pou>
+      <pou name="CfcDiv" pouType="program">
+        <interface>
+          <localVars>
+            <variable name="dividend"><type><INT/></type></variable>
+            <variable name="quot"><type><INT/></type></variable>
+          </localVars>
+        </interface>
+        <body>
+          <addData>
+            <data name="cfc" handleUnknown="implementation">
+              <CFC>
+                <inVariable localId="1"><expression>dividend</expression><connectionPointOut/></inVariable>
+                <inVariable localId="2"><expression>0</expression><connectionPointOut/></inVariable>
+                <block localId="3" typeName="DIV" executionOrderId="0">
+                  <inputVariables>
+                    <variable formalParameter="In1"><connectionPointIn><connection refLocalId="1"/></connectionPointIn></variable>
+                    <variable formalParameter="In2"><connectionPointIn><connection refLocalId="2"/></connectionPointIn></variable>
+                  </inputVariables>
+                  <outputVariables>
+                    <variable formalParameter="Out1"><connectionPointOut/></variable>
+                  </outputVariables>
+                </block>
+                <outVariable localId="4"><expression>quot</expression><connectionPointIn><connection refLocalId="3"/></connectionPointIn></outVariable>
+              </CFC>
+            </data>
+          </addData>
+        </body>
+      </pou>
+      <pou name="Main" pouType="program">
+        <interface>
+          <localVars>
+            <variable name="arr"><type><array><dimension lower="0" upper="3"/><baseType><INT/></baseType></array></type></variable>
+            <variable name="iSum"><type><INT/></type></variable>
+            <variable name="iq"><type><INT/></type></variable>
+            <variable name="d"><type><INT/></type></variable>
+            <variable name="x"><type><INT/></type></variable>
+            <variable name="c"><type><BOOL/></type></variable>
+            <variable name="t1"><type><derived name="TON"/></type></variable>
+          </localVars>
+        </interface>
+        <body>
+          <ST><xhtml xmlns="http://www.w3.org/1999/xhtml">arr[5] := 1;
+d := d / 0;
+iq := iSum / 10;
+t1(IN := c, PT := T#0S);
+y := gvl.Missing;
+x := x;
+IF c THEN END_IF
+CASE x OF
+1: x := 1;
+END_CASE
+WHILE TRUE DO x := x + 1; END_WHILE</xhtml></ST>
+        </body>
+      </pou>
+    </pous>
+  </types>
+</project>
