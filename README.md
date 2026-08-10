@@ -40,7 +40,7 @@ Real findings from 8 real boiler-house projects (CODESYS 3.5 SP17, scores 62–8
 Plus hygiene: magic numbers, dead POUs, bloated routines, missing comments,
 naming-standard profiles, device/IO-mapping summary.
 
-**All 29 rules, with what each one reads and how to fix it: [RULES.md](RULES.md).**
+**All 34 rules, with what each one reads and how to fix it: [RULES.md](RULES.md).**
 A known-bad project you can upload yourself, with every expected finding listed:
 [examples/](examples/).
 

@@ -1,10 +1,11 @@
 # PLC Lint — rule reference
 
-**29 checks.** Each entry says what it reads and how to fix it. Run them on your own export at [plc-linter.com](https://plc-linter.com) — or on the [example project](examples/).
+**34 checks.** Each entry says what it reads and how to fix it. Run them on your own export at [plc-linter.com](https://plc-linter.com) — or on the [example project](examples/).
 
 Severity: 🔴 high · 🟠 medium · ⚪ low.
 
-## 🔴 High (9)
+
+## 🔴 High (13)
 
 ### `array-bounds` — Array index out of bounds
 **Reads:** A constant index falls outside the declared ARRAY[lo..hi] bounds — reaching this line reads/writes memory that isn't yours. Without active implicit checks the runtime won't intercept it. Checked for one-dimensional arrays with numeric bounds and a literal index.
@@ -34,6 +35,21 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 - Remove the division by 0 — probably a typo in the divisor.
 - If the divisor can be zero dynamically — guard it: `IF d <> 0 THEN r := x / d; END_IF`
 
+### `family-gap` — Channel never written — gap in a channel family
+**Reads:** A field is declared for every channel in a family (boilers 1–4, pumps 1–3) and used by all of them but exactly one, where it is never written. The usual cause: the block was copied from a neighbouring channel and left unfinished. The compiler stays silent — the variable exists and the type is right, nobody just writes to it. On site this shows up as “boiler 4 never reports alarms” while the other three work, and it never reproduces on the bench. The rule relies on declarations: if the field is not declared for that channel, it is different hardware rather than a gap, and nothing is reported.
+
+**Fix:**
+- Check that channel's block: an assignment was most likely copied from the neighbour and kept its indexes — `gvl.kotel_3_alarms3 := ...` instead of `gvl.kotel_4_alarms3 := ...`.
+- If the field genuinely does not apply to that channel (no such hardware), drop its declaration — the rule goes quiet and the GVL loses a dead variable.
+
+### `heating-ai-no-range-check` — Analog input without a plausibility check
+**Reads:** A value coming from an analog input (or a raw register) is never compared against a range anywhere in the project. On a broken or shorted sensor the input returns an extreme value and it travels into the controller as valid data: a broken Pt1000 reads as 0 °C and the valve opens fully. Inputs are taken from the device tree (nothing assigns them in code — the runtime does). A check means either a range comparison anywhere in the project or a read of the module's own channel error code (`error_analog_code` and the like) — the latter is in fact stronger: a broken or shorted sensor is caught by the hardware. If plausibility is handled in a way static analysis cannot see (the HMI), verify before treating this as a defect.
+
+**Fix:**
+- Compare the value with the sensor's physical range right after scaling: `IF T_out < -50.0 OR T_out > 150.0 THEN bSensorFault := TRUE; END_IF`
+- While the reading is invalid, substitute a safe value (the last valid one, or a setpoint) instead of the raw one — a frozen plant usually starts with “0 °C outside”.
+- If plausibility is handled by a separate alarm FB or by the HMI, the rule cannot see it — disable it in /rules or mark it as noisy.
+
 ### `infinite-loop` — Infinite loop with no exit
 **Reads:** WHILE TRUE / REPEAT … UNTIL FALSE with no EXIT or RETURN inside — the scan never finishes: the task blocks and the watchdog fires (and if the watchdog is off, the controller stalls). In a PLC, long processing is spread across scans, not spun in a loop.
 
@@ -47,6 +63,20 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 **Fix:**
 - Assign each module a unique address (IP or Unit-ID) in the device configuration.
 - Cross-check the network address map — an address must be unique on one bus.
+
+### `param-channel-mismatch` — Channel parameter fed from another channel
+**Reads:** In a function block call the parameter name refers to one channel while the value comes from another: `bPump2_Fault := gvl.alarm_nasos_CO1`. The rule fires only when channel numbering is proven within the same call — consistent pairs exist for at least two channels. The consequence is quiet and dangerous: a faulty pump is treated as healthy and picked for duty, the interlock never fires, and the log looks perfectly normal.
+
+**Fix:**
+- Fix the index in the value: `bPump2_Fault := gvl.alarm_nasos_CO2`.
+- Repeated per-channel calls are better folded into a loop over an array (`FOR i := 1 TO 3 DO fb[i](...)`) — then there is nothing left to renumber.
+
+### `self-enable` — Command depends on its own feedback
+**Reads:** A start command is derived from a function block output that is computed from its own input within the same scan, while that input is fed with the equipment's own feedback: pump rotation, valve position, “unit running”. The result is a deadlock — the equipment is stopped, so there is no permission, so there is no command, so it stays stopped. The loop never starts, and on a bench with the drive spun by hand everything looks fine. The phrase “within the same scan” is what matters: an output that depends on the input through memory (a start counter, a timer, an edge trigger) is perfectly legitimate in the command chain, and the rule leaves it alone.
+
+**Fix:**
+- Feed the STATE output into the command instead of a permission output that contains the input itself: `NOT bProtBlocked1` rather than `bStartAllow`. The protection keeps working — the start-count lockout is unaffected.
+- Check what is wired to the block input: the start command and the running feedback are different signals, and swapping one for the other only shows up on site.
 
 ### `uncalled-timer` — Uncalled timer/trigger
 **Reads:** A timer/trigger instance is read (.Q/.ET) or written (.IN), but the FB itself is never called name(...) — it never ticks, the output stays in its initial state.
@@ -68,7 +98,8 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 - Order the thresholds ascending with non-overlapping ranges: `IF x < T1 THEN … ELSIF x < T2 THEN … ELSE …`
 - Replace the ELSIF chain with an array of curve points and interpolation.
 
-## 🟠 Medium (10)
+
+## 🟠 Medium (11)
 
 ### `case-without-else` — CASE without an ELSE branch (no default)
 **Reads:** CASE without an ELSE branch: if the selector takes a value not among the labels, nothing runs — a silent skip (a common state-machine bug).
@@ -90,6 +121,13 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 **Fix:**
 - Regenerate the POUs for Implicit Checks via the standard CODESYS dialog — that gives the check its `CheckFunction` registration so the runtime calls it.
 - Add the missing category (bounds/division/range/pointer) via `Add Object → POUs for Implicit Checks`.
+
+### `index-mismatch` — Line indexes differently from its group
+**Reads:** Across a group of similar lines the relation between index positions holds nearly everywhere but is broken in one line: eleven lines write to their own channel, the twelfth writes to someone else's. That is what a copied neighbouring branch with partial renumbering looks like. The rule does not compare whole lines: numbers from different dimensions (boiler number and alarm block number) coincide routinely, and that case is accounted for. This is a heuristic — before changing anything, check whether the line is a deliberate exception.
+
+**Fix:**
+- Compare the line with its neighbours in the group: usually the destination was not renumbered — `w_cascadK4 := r_cascadK4` instead of `w_cascadK3 := r_cascadK4`.
+- If the line is a deliberate exception, put a comment next to it — that saves the next reader (and you in six months) an investigation.
 
 ### `int-division` — Integer division (lost fraction?)
 **Reads:** Dividing an integer by an integer constant drops the fraction. Use /N.0 or *_TO_REAL if precision matters.
@@ -138,6 +176,7 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 **Fix:**
 - Enable the task watchdog: in the task configuration tick Watchdog and set the time (usually a multiple of the cycle, e.g. 100 ms for a 10 ms cycle).
 - At least for the main control task — visualization/cloud tasks can go without one.
+
 
 ## ⚪ Low (10)
 
