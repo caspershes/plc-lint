@@ -58,6 +58,84 @@ qb := 5 / zcond;</xhtml></ST>
           </addData>
         </body>
       </pou>
+      <!-- ===== channel-mismatch: «скопировали соседний канал и не всё перенумеровали» =====
+           Три бага воспроизводят боевой случай (каскад из 4 котлов + группа насосов).
+           В каждом POU рядом с багом стоит негативный контроль: случай, который ВЫГЛЯДИТ
+           похоже, но дефектом не является, — правило обязано на нём молчать. -->
+      <pou name="ktr_errors" pouType="program">
+        <interface><localVars/></interface>
+        <body>
+          <ST><xhtml xmlns="http://www.w3.org/1999/xhtml">gvl.kotel_1_alarms1 := gvl.kotel_1_code_error_1;
+gvl.kotel_1_alarms2 := gvl.kotel_1_code_error_2;
+gvl.kotel_1_alarms3 := gvl.kotel_1_code_error_3;
+gvl.kotel_2_alarms1 := gvl.kotel_2_code_error_1;
+gvl.kotel_2_alarms2 := gvl.kotel_2_code_error_2;
+gvl.kotel_2_alarms3 := gvl.kotel_2_code_error_3;
+gvl.kotel_3_alarms1 := gvl.kotel_3_code_error_1;
+gvl.kotel_3_alarms2 := gvl.kotel_3_code_error_2;
+gvl.kotel_3_alarms3 := gvl.kotel_3_code_error_3;
+gvl.kotel_4_alarms1 := gvl.kotel_4_code_error_1;
+gvl.kotel_4_alarms2 := gvl.kotel_4_code_error_2;
+(* БАГ family-gap: блок котла 4 скопирован с котла 3 и не дописан —
+   kotel_4_alarms3 объявлен, но нигде не заполняется *)
+gvl.kotel_3_alarms3 := gvl.kotel_3_code_error_3;
+(* НЕГАТИВНЫЙ КОНТРОЛЬ: у насоса 3 нет частотника, поле freq у него и НЕ ОБЪЯВЛЕНО —
+   разный состав оборудования, а не пропуск. Правило обязано молчать. *)
+gvl.nasos_1_flow := TRUE;
+gvl.nasos_2_flow := TRUE;
+gvl.nasos_3_flow := TRUE;
+gvl.nasos_1_freq := 50;
+gvl.nasos_2_freq := 50;</xhtml></ST>
+        </body>
+      </pou>
+      <pou name="reindex_cascad" pouType="program">
+        <interface><localVars/></interface>
+        <body>
+          <ST><xhtml xmlns="http://www.w3.org/1999/xhtml">(* Перестроение каскада: котёл выводится в резерв — его позицию занимает сосед.
+   Двенадцать однотипных строк, в одной индекс приёмника не перенумерован. *)
+IF gvl.stop_K1 THEN gvl.w_cascadK1 := gvl.r_cascadK2; END_IF
+IF gvl.stop_K1 THEN gvl.w_cascadK1 := gvl.r_cascadK3; END_IF
+IF gvl.stop_K1 THEN gvl.w_cascadK1 := gvl.r_cascadK4; END_IF
+IF gvl.stop_K2 THEN gvl.w_cascadK2 := gvl.r_cascadK1; END_IF
+IF gvl.stop_K2 THEN gvl.w_cascadK2 := gvl.r_cascadK3; END_IF
+IF gvl.stop_K2 THEN gvl.w_cascadK2 := gvl.r_cascadK4; END_IF
+IF gvl.stop_K3 THEN gvl.w_cascadK3 := gvl.r_cascadK1; END_IF
+IF gvl.stop_K3 THEN gvl.w_cascadK3 := gvl.r_cascadK2; END_IF
+IF gvl.stop_K4 THEN gvl.w_cascadK4 := gvl.r_cascadK1; END_IF
+IF gvl.stop_K4 THEN gvl.w_cascadK4 := gvl.r_cascadK2; END_IF
+IF gvl.stop_K4 THEN gvl.w_cascadK4 := gvl.r_cascadK3; END_IF
+(* БАГ index-mismatch: ветка K3 скопирована из K4 — пишем не в свой канал.
+   Должно быть gvl.w_cascadK3 := gvl.r_cascadK4 *)
+IF gvl.stop_K3 THEN gvl.w_cascadK4 := gvl.r_cascadK4; END_IF
+(* НЕГАТИВНЫЙ КОНТРОЛЬ (грабля Г2): номер котла и номер блока аварий — разные
+   измерения, их совпадение случайно и дефектом не является *)
+gvl.kotel_1_alarms1 := 1;
+gvl.kotel_1_alarms2 := 1;
+gvl.kotel_2_alarms1 := 1;
+gvl.kotel_2_alarms3 := 1;</xhtml></ST>
+        </body>
+      </pou>
+      <pou name="work_nasos_CO" pouType="program">
+        <interface>
+          <localVars>
+            <variable name="fbSeize"><type><derived name="FB_PumpAntiSeize"/></type></variable>
+          </localVars>
+        </interface>
+        <body>
+          <ST><xhtml xmlns="http://www.w3.org/1999/xhtml">(* БАГ param-channel-mismatch: bPump2_Fault получает аварию насоса 1 —
+   аварийный насос 2 считается исправным и выбирается для тестового прогона *)
+fbSeize(bPump1_Idle := gvl.idle_nasos_CO1,
+        bPump1_Fault := gvl.alarm_nasos_CO1,
+        bPump2_Idle := gvl.idle_nasos_CO2,
+        bPump2_Fault := gvl.alarm_nasos_CO1,
+        bPump3_Idle := gvl.idle_nasos_CO3,
+        bPump3_Fault := gvl.alarm_nasos_CO3);
+(* НЕГАТИВНЫЙ КОНТРОЛЬ: нумерация каналов НЕ доказана — согласованных пар меньше двух,
+   значит имя параметра и имя сигнала нумеруются по-разному (обычное дело) *)
+fbOther(bLine1_Cmd := gvl.valve_ГВС_7,
+        bLine2_Cmd := gvl.valve_ГВС_9);</xhtml></ST>
+        </body>
+      </pou>
       <pou name="Main" pouType="program">
         <interface>
           <localVars>
@@ -86,4 +164,66 @@ WHILE TRUE DO x := x + 1; END_WHILE</xhtml></ST>
       </pou>
     </pous>
   </types>
+  <instances>
+    <configurations>
+      <configuration name="Device">
+        <resource name="Application">
+          <!-- GVL нужен правилу family-gap: «пропуск» считается дефектом только если поле
+               ОБЪЯВЛЕНО у всех членов семейства (грабля Г3). У насоса 3 поля freq нет —
+               и оно у него не объявлено, поэтому это не пропуск, а другое оборудование. -->
+          <globalVars name="GVL">
+            <variable name="kotel_1_alarms1"><type><WORD/></type></variable>
+            <variable name="kotel_1_alarms2"><type><WORD/></type></variable>
+            <variable name="kotel_1_alarms3"><type><WORD/></type></variable>
+            <variable name="kotel_2_alarms1"><type><WORD/></type></variable>
+            <variable name="kotel_2_alarms2"><type><WORD/></type></variable>
+            <variable name="kotel_2_alarms3"><type><WORD/></type></variable>
+            <variable name="kotel_3_alarms1"><type><WORD/></type></variable>
+            <variable name="kotel_3_alarms2"><type><WORD/></type></variable>
+            <variable name="kotel_3_alarms3"><type><WORD/></type></variable>
+            <variable name="kotel_4_alarms1"><type><WORD/></type></variable>
+            <variable name="kotel_4_alarms2"><type><WORD/></type></variable>
+            <variable name="kotel_4_alarms3"><type><WORD/></type></variable>
+            <variable name="kotel_1_code_error_1"><type><WORD/></type></variable>
+            <variable name="kotel_1_code_error_2"><type><WORD/></type></variable>
+            <variable name="kotel_1_code_error_3"><type><WORD/></type></variable>
+            <variable name="kotel_2_code_error_1"><type><WORD/></type></variable>
+            <variable name="kotel_2_code_error_2"><type><WORD/></type></variable>
+            <variable name="kotel_2_code_error_3"><type><WORD/></type></variable>
+            <variable name="kotel_3_code_error_1"><type><WORD/></type></variable>
+            <variable name="kotel_3_code_error_2"><type><WORD/></type></variable>
+            <variable name="kotel_3_code_error_3"><type><WORD/></type></variable>
+            <variable name="kotel_4_code_error_1"><type><WORD/></type></variable>
+            <variable name="kotel_4_code_error_2"><type><WORD/></type></variable>
+            <variable name="kotel_4_code_error_3"><type><WORD/></type></variable>
+            <variable name="nasos_1_flow"><type><BOOL/></type></variable>
+            <variable name="nasos_2_flow"><type><BOOL/></type></variable>
+            <variable name="nasos_3_flow"><type><BOOL/></type></variable>
+            <variable name="nasos_1_freq"><type><INT/></type></variable>
+            <variable name="nasos_2_freq"><type><INT/></type></variable>
+            <variable name="r_cascadK1"><type><INT/></type></variable>
+            <variable name="r_cascadK2"><type><INT/></type></variable>
+            <variable name="r_cascadK3"><type><INT/></type></variable>
+            <variable name="r_cascadK4"><type><INT/></type></variable>
+            <variable name="w_cascadK1"><type><INT/></type></variable>
+            <variable name="w_cascadK2"><type><INT/></type></variable>
+            <variable name="w_cascadK3"><type><INT/></type></variable>
+            <variable name="w_cascadK4"><type><INT/></type></variable>
+            <variable name="stop_K1"><type><BOOL/></type></variable>
+            <variable name="stop_K2"><type><BOOL/></type></variable>
+            <variable name="stop_K3"><type><BOOL/></type></variable>
+            <variable name="stop_K4"><type><BOOL/></type></variable>
+            <variable name="idle_nasos_CO1"><type><BOOL/></type></variable>
+            <variable name="idle_nasos_CO2"><type><BOOL/></type></variable>
+            <variable name="idle_nasos_CO3"><type><BOOL/></type></variable>
+            <variable name="alarm_nasos_CO1"><type><BOOL/></type></variable>
+            <variable name="alarm_nasos_CO2"><type><BOOL/></type></variable>
+            <variable name="alarm_nasos_CO3"><type><BOOL/></type></variable>
+            <variable name="valve_ГВС_7"><type><BOOL/></type></variable>
+            <variable name="valve_ГВС_9"><type><BOOL/></type></variable>
+          </globalVars>
+        </resource>
+      </configuration>
+    </configurations>
+  </instances>
 </project>

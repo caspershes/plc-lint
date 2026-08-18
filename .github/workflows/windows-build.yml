@@ -1,0 +1,75 @@
+# Сборка plc-lint.exe для Windows.
+#
+# Кросс-компиляции у PyInstaller нет: .exe собирается только на Windows, а разработка
+# идёт на Linux. Поэтому сборку делает раннер windows-latest, а не рабочая машина.
+#
+# Что получается на выходе: один файл без зависимостей и без установщика. Инженер
+# скачивает его и перетаскивает на него экспорт мышью — это единственный сценарий,
+# который срабатывает на машине, где нет прав администратора и нет Python. Так же
+# он ложится в артефакты релиза, откуда сайт даёт прямую ссылку.
+name: windows-build
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:      # ручной запуск: собрать проверочную сборку без тега
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: PyInstaller
+        run: pip install pyinstaller==6.11.1
+
+      # --onefile: без папки с библиотеками, иначе «скачал и запустил» превращается
+      # в распаковку архива. --console: программа печатает отчёт, окно нужно.
+      # engine и i18n — обычные модули рядом с cli.py, PyInstaller находит их по
+      # импортам; hidden-import'ы не нужны, движку хватает стандартной библиотеки.
+      - name: Сборка
+        run: pyinstaller --onefile --console --name plc-lint cli.py
+
+      - name: Проверка собранного .exe
+        shell: pwsh
+        run: |
+          $exe = "dist\plc-lint.exe"
+          & $exe --version
+          if ($LASTEXITCODE -ne 0) { throw "exe не запускается" }
+
+          # Фикстура лежит в examples/ (публичный репозиторий) или tests/fixtures/
+          $fx = @("examples\synthetic_bugs.xml", "tests\fixtures\synthetic_bugs.xml") |
+                Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $fx) { throw "не найдена фикстура для проверки сборки" }
+
+          # Прогон на синтетическом экспорте: сборка обязана давать находки,
+          # иначе в релиз уедет .exe, который «успешно» ничего не проверяет.
+          & $exe $fx --no-html --no-color --json > out.json
+          $r = Get-Content out.json -Raw | ConvertFrom-Json
+          if ($r[0].summary.high -lt 1) { throw "нет находок — сборка нерабочая" }
+          Write-Host "находок: high=$($r[0].summary.high) medium=$($r[0].summary.medium)"
+
+          # HTML рядом с файлом — то, что увидит инженер после drag&drop
+          & $exe $fx --no-color | Out-Null
+          if (-not (Test-Path ($fx -replace '\.xml$', '-report.html'))) { throw "HTML не создан" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plc-lint-windows
+          path: dist/plc-lint.exe
+
+      - name: Релиз (только для тега)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/plc-lint.exe
+          body: |
+            Локальная версия PLC Lint для Windows — один файл, без установки и без Python.
+
+            Проверка идёт на вашем компьютере: программа не выходит в сеть, экспорт
+            никуда не отправляется. Перетащите .xml на plc-lint.exe — рядом появится
+            HTML-отчёт и откроется в браузере.

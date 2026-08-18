@@ -6,11 +6,16 @@ Your project compiles clean and still ships with an uncalled timer, a truncated
 setpoint, or a divide-by-a-variable-that's-sometimes-zero. The compiler doesn't
 catch it — the syntax is valid. PLC Lint does.
 
-👉 **Try it free (no signup for one analysis): [plc-linter.com](https://plc-linter.com)**
+👉 **Try it free (no signup): [plc-linter.com](https://plc-linter.com)** &nbsp;·&nbsp; **Or run it locally: [plc-lint.exe](https://github.com/caspershes/plc-lint/releases/latest)**
 &nbsp;·&nbsp; **Live sample report: [plc-linter.com/demo](https://plc-linter.com/demo)**
 
-> This repo is a showcase (docs, examples, rule reference). The analyzer runs as a
-> hosted service — the upload is processed in memory and your code is not stored.
+> **Run it locally — nothing leaves your machine.** Windows: grab
+> [`plc-lint.exe`](https://github.com/caspershes/plc-lint/releases/latest) and drop your
+> export onto it. Anywhere else: `python cli.py project.xml`. No install, no dependencies,
+> **no network calls at all** — that last part is enforced by a test, not by a promise
+> ([`tests/cli_local.py`](tests/cli_local.py) runs the whole analysis with `socket` replaced
+> by one that raises). The hosted version at [plc-linter.com](https://plc-linter.com) is the
+> same engine with sharing, history and certificates on top.
 
 ---
 
@@ -43,6 +48,51 @@ naming-standard profiles, device/IO-mapping summary.
 **All 34 rules, with what each one reads and how to fix it: [RULES.md](RULES.md).**
 A known-bad project you can upload yourself, with every expected finding listed:
 [examples/](examples/).
+
+## Run it on your own machine
+
+Your customer's export is their intellectual property, and sending it to somebody else's
+server is rarely your call — it's company policy or a clause in the NDA. So don't.
+
+**Windows, no Python:** download `plc-lint.exe` from
+[Releases](https://github.com/caspershes/plc-lint/releases/latest), drag your `.xml` onto it.
+An HTML report appears next to the file and opens in your browser.
+
+**Anywhere with Python 3.9+:** no dependencies, the engine is standard library only.
+
+```
+python cli.py project.xml                # report in the console + HTML next to the file
+python cli.py exports/ --no-html         # a whole folder at once
+python cli.py p.xml --json > report.json # machine-readable, for a build pipeline
+python cli.py p.xml --fail-on high       # exit code 1 if there are high-severity findings
+python cli.py p.xml --profile heating    # optional rule profiles: heating, plcopen-naming
+```
+
+The report is identical to the hosted one — same 34 rules, same engine file. What the
+hosted version adds: sharing a link, history across builds, diffs between two exports,
+the acceptance protocol and the signed certificate.
+
+### In CI
+
+`--fail-on` makes the exit code meaningful, so a build breaks on a divide-by-zero the
+compiler was happy with:
+
+```yaml
+- run: python cli.py exports/*.xml --fail-on high --no-html
+```
+
+## What's in this repository
+
+| | |
+|---|---|
+| `engine.py` | the analyzer: parser + all 34 rules |
+| `i18n.py` | rule titles, explanations and fixes (EN/RU) |
+| `cli.py` | local runner: console + HTML + JSON |
+| `tests/cli_local.py` | proves the local run never touches the network |
+| `examples/` | a known-bad project with every expected finding listed |
+| `RULES.md` | the full rule reference, generated from the engine |
+
+MIT licensed. Fork it, vendor it, wire it into your own pipeline.
 
 ## Honest limits (because trust is the whole point)
 
