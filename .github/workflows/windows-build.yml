@@ -17,6 +17,10 @@ on:
 jobs:
   build:
     runs-on: windows-latest
+    # GITHUB_TOKEN по умолчанию только читает: без этого шаг релиза падает с 403
+    # «Resource not accessible by integration» уже после успешной сборки.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
