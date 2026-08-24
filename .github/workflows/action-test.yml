@@ -1,0 +1,57 @@
+# Проверка самого Action на нашей же сломанной фикстуре.
+#
+# Нужна потому, что Action ломается не в коде, а в склейке: переименовали флаг CLI,
+# сменили формат JSON — и у чужих людей в пайплайне всё падает молча. Здесь Action
+# запускается из этого же репозитория (uses: ./), поэтому поломка видна до релиза.
+name: action-test
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Заодно каждый push проверяет главное обещание: локальный запуск не ходит в сеть
+      - run: python tests/cli_local.py
+
+  action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # В фикстуре заведомо есть находки уровня high, значит шаг обязан упасть.
+      # continue-on-error, чтобы проверить это, а не свалить весь прогон.
+      - id: lint
+        uses: ./
+        continue-on-error: true
+        with:
+          path: examples/synthetic_bugs.xml
+          fail-on: high
+
+      - name: Проверки
+        shell: bash
+        run: |
+          set -euo pipefail
+          outcome="${{ steps.lint.outcome }}"
+          [ "$outcome" = "failure" ] || { echo "ожидался провал: в фикстуре есть high"; exit 1; }
+          [ "${{ steps.lint.outputs.high }}" -ge 1 ] || { echo "не посчитаны high"; exit 1; }
+          [ "${{ steps.lint.outputs.files }}" = "1" ] || { echo "разобран не один файл"; exit 1; }
+          [ -s "${{ steps.lint.outputs.json }}" ] || { echo "нет JSON-отчёта"; exit 1; }
+          score="${{ steps.lint.outputs.score }}"
+          [ "$score" -ge 0 ] && [ "$score" -le 100 ] || { echo "странный балл: $score"; exit 1; }
+          echo "балл $score, high ${{ steps.lint.outputs.high }}"
+
+      # fail-on: none — тот же прогон обязан быть зелёным; заодно проверяется
+      # обход каталога и выгрузка HTML артефактом
+      - uses: ./
+        with:
+          path: examples/
+          fail-on: none
+          html: 'true'

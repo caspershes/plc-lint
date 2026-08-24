@@ -1,0 +1,125 @@
+# GitHub Action: проверка экспортов PLCopenXML в чужом пайплайне.
+#
+# Смысл ровно тот же, что у локального запуска: анализ идёт на машине пользователя
+# (раннере), экспорт никуда не отправляется. Ничего сетевого здесь нет — движок
+# работает на стандартной библиотеке, а весь код лежит рядом в этом же репозитории.
+#
+# Файл обязан быть в корне репозитория: GitHub Marketplace ищет action.yml только там.
+name: 'PLC Lint'
+description: 'Static analysis for PLCopenXML exports (CODESYS, TwinCAT): finds bugs the compiler accepts.'
+author: 'PLC Lint'
+
+branding:
+  icon: 'cpu'
+  color: 'blue'
+
+inputs:
+  path:
+    description: 'What to analyze: files, globs or directories, space-separated. Directories are searched recursively for *.xml.'
+    required: false
+    default: '.'
+  fail-on:
+    description: 'Fail the step when a finding of this severity or worse is present: high, medium, low, none.'
+    required: false
+    default: 'high'
+  profile:
+    description: 'Optional rule profiles, comma-separated: heating, plcopen-naming.'
+    required: false
+    default: ''
+  lang:
+    description: 'Report language: en or ru.'
+    required: false
+    default: 'en'
+  html:
+    description: 'Also produce an HTML report per export and upload it as a build artifact.'
+    required: false
+    default: 'false'
+  summary:
+    description: 'Write the results into the job summary page.'
+    required: false
+    default: 'true'
+  annotations:
+    description: 'Emit ::error / ::warning annotations for findings (GitHub shows at most 10 of each per step).'
+    required: false
+    default: 'true'
+  python-version:
+    description: 'Python used to run the analyzer.'
+    required: false
+    default: '3.12'
+
+outputs:
+  score:
+    description: 'Quality score 0-100 (the lowest one if several exports were analyzed).'
+    value: ${{ steps.lint.outputs.score }}
+  high:
+    description: 'Number of high-severity findings across all analyzed exports.'
+    value: ${{ steps.lint.outputs.high }}
+  medium:
+    description: 'Number of medium-severity findings.'
+    value: ${{ steps.lint.outputs.medium }}
+  low:
+    description: 'Number of low-severity findings.'
+    value: ${{ steps.lint.outputs.low }}
+  files:
+    description: 'How many exports were analyzed.'
+    value: ${{ steps.lint.outputs.files }}
+  json:
+    description: 'Path to the full machine-readable report.'
+    value: ${{ steps.lint.outputs.json }}
+
+runs:
+  using: 'composite'
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - id: lint
+      shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        INPUT_FAIL_ON: ${{ inputs.fail-on }}
+        INPUT_PROFILE: ${{ inputs.profile }}
+        INPUT_LANG: ${{ inputs.lang }}
+        INPUT_HTML: ${{ inputs.html }}
+        INPUT_SUMMARY: ${{ inputs.summary }}
+        INPUT_ANNOTATIONS: ${{ inputs.annotations }}
+      run: |
+        # GitHub запускает shell: bash с -e: без явного +e шаг умрёт на коде возврата
+        # линтера, не напечатав отчёт и не отдав outputs.
+        set +e -u -o pipefail
+
+        # «heating,plcopen-naming» → «--profile heating --profile plcopen-naming»
+        profile_flags=""
+        IFS=',' read -ra parts <<< "$INPUT_PROFILE"
+        for p in "${parts[@]}"; do
+          p="${p// /}"
+          [ -n "$p" ] && profile_flags="$profile_flags --profile $p"
+        done
+
+        html_flag="--no-html"
+        [ "$INPUT_HTML" = "true" ] && html_flag=""
+
+        json="$RUNNER_TEMP/plc-lint.json"
+
+        # $INPUT_PATH намеренно без кавычек: несколько путей задаются через пробел
+        python "$GITHUB_ACTION_PATH/cli.py" $INPUT_PATH $html_flag $profile_flags \
+          --lang "$INPUT_LANG" --fail-on "$INPUT_FAIL_ON" --no-color --json > "$json"
+        code=$?
+
+        # Отчёт печатается всегда, в том числе когда шаг обязан упасть: иначе человек
+        # видит только красный крестик и лезет читать JSON руками.
+        sum_args=""
+        [ "$INPUT_SUMMARY" != "true" ] && sum_args="$sum_args --no-summary"
+        [ "$INPUT_ANNOTATIONS" != "true" ] && sum_args="$sum_args --no-annotations"
+        python "$GITHUB_ACTION_PATH/ci/summary.py" "$json" $sum_args || true
+
+        exit $code
+
+    # always(): HTML нужен именно тогда, когда шаг упал — там находки
+    - if: ${{ always() && inputs.html == 'true' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: plc-lint-report
+        path: '**/*-report.html'
+        if-no-files-found: ignore

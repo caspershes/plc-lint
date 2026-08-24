@@ -74,8 +74,40 @@ the acceptance protocol and the signed certificate.
 
 ### In CI
 
-`--fail-on` makes the exit code meaningful, so a build breaks on a divide-by-zero the
-compiler was happy with:
+If your PLC project lives in git, the export can be checked on every push. There's a
+GitHub Action in this repository:
+
+```yaml
+- uses: actions/checkout@v4
+- uses: caspershes/plc-lint@v1
+  with:
+    path: exports/          # files, globs or a directory
+    fail-on: high           # break the build on high-severity findings
+```
+
+The results land on the job summary page as a table, high-severity findings become
+annotations, and the run is still entirely local — the analyzer runs on the runner and
+makes no network calls.
+
+| input | default | |
+|---|---|---|
+| `path` | `.` | files, globs or directories (space-separated) |
+| `fail-on` | `high` | `high` / `medium` / `low` / `none` |
+| `profile` | — | `heating`, `plcopen-naming` (comma-separated) |
+| `lang` | `en` | `en` or `ru` |
+| `html` | `false` | also produce HTML reports and upload them as an artifact |
+
+Outputs: `score`, `high`, `medium`, `low`, `files`, `json` — so you can gate a merge on
+the score rather than on severity:
+
+```yaml
+- id: lint
+  uses: caspershes/plc-lint@v1
+  with: { path: exports/, fail-on: none }
+- run: test "${{ steps.lint.outputs.score }}" -ge 70
+```
+
+Without GitHub, the exit code does the same job anywhere:
 
 ```yaml
 - run: python cli.py exports/*.xml --fail-on high --no-html
@@ -88,6 +120,8 @@ compiler was happy with:
 | `engine.py` | the analyzer: parser + all 34 rules |
 | `i18n.py` | rule titles, explanations and fixes (EN/RU) |
 | `cli.py` | local runner: console + HTML + JSON |
+| `action.yml` | GitHub Action: the same analysis inside a CI pipeline |
+| `ci/summary.py` | turns the JSON report into the Actions job summary |
 | `tests/cli_local.py` | proves the local run never touches the network |
 | `examples/` | a known-bad project with every expected finding listed |
 | `RULES.md` | the full rule reference, generated from the engine |

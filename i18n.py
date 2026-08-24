@@ -122,6 +122,14 @@ STRINGS = {
     "index.no_file_hint": ('Файла под рукой нет? В CODESYS это полминуты: '
                            '<a href="/export-guide" target="_blank" rel="noopener" '
                            'data-ym-goal="home_howto">Project → Export PLCopenXML →</a>'),
+    "index.local_h": "Код заказчика нельзя выгружать наружу?",
+    "index.local_p": ("Тогда не выгружайте. Локальная версия проверяет файл на вашем "
+                      "компьютере и <strong>не выходит в сеть вообще</strong> — это не обещание, "
+                      "а свойство программы: движок открыт, а запрет проверяется тестом. "
+                      "Один .exe, без установки и без Python: перетащите на него экспорт — "
+                      "рядом появится тот же отчёт."),
+    "index.local_btn": "Скачать для Windows",
+    "index.local_note": "исходники и версия для Linux/macOS — на GitHub",
     "index.sev_high": "Из-за этого контроллер встанет или пойдёт вразнос ({n})",
     "index.sev_medium": "Тихие дефекты: работает, но не так, как задумано ({n})",
     "index.sev_low": "Стиль и сопровождаемость ({n})",
@@ -245,6 +253,14 @@ STRINGS = {
                        "Отчёт на сервере не хранится: он переносится к вам подписанным токеном "
                        "в ссылке, поэтому «открыть чужой отчёт по ссылке» невозможно, а нам "
                        "нечего отдавать по запросу — у нас его нет."),
+    "trust.local_h": "Можно вообще ничего нам не отправлять",
+    "trust.local_p": ("Всё, что написано ниже, — про устройство нашего сервера, и проверить это "
+                      "на слово нельзя. Поэтому есть локальная версия: она проверяет файл на "
+                      "вашем компьютере и не делает ни одного сетевого вызова. Это не режим и не "
+                      "обещание — движок открыт, а запрет на сеть держится тестом, который гоняет "
+                      "весь разбор с подменённым сокетом. "
+                      "<a href=\"https://github.com/caspershes/plc-lint/releases/latest\" rel=\"noopener\">Скачать для Windows</a> · "
+                      "<a href=\"https://github.com/caspershes/plc-lint\" rel=\"noopener\">исходники</a>"),
     "trust.log_h": "Что уходит в общую статистику (Free)",
     "trust.log_p": ("Ровно эти поля, одна строка на анализ. Список не пересказ, а перечень из "
                     "кода — за совпадением следит тест, иначе он бы устарел на первом же "
@@ -704,6 +720,14 @@ STRINGS = {
     "index.no_file_hint": ('No export at hand? It takes half a minute in CODESYS: '
                            '<a href="/export-guide" target="_blank" rel="noopener" '
                            'data-ym-goal="home_howto">Project → Export PLCopenXML →</a>'),
+    "index.local_h": "Not allowed to upload customer code?",
+    "index.local_p": ("Then don't. The local build checks the file on your own machine and "
+                      "<strong>makes no network calls at all</strong> — not a promise but a "
+                      "property of the program: the engine is open and the ban is enforced by a "
+                      "test. A single .exe, no install and no Python: drop an export onto it and "
+                      "the same report appears next to the file."),
+    "index.local_btn": "Download for Windows",
+    "index.local_note": "sources and Linux/macOS build are on GitHub",
     "index.sev_high": "Will stop the controller or send it out of control ({n})",
     "index.sev_medium": "Quiet defects: it runs, but not as intended ({n})",
     "index.sev_low": "Style and maintainability ({n})",
@@ -826,6 +850,14 @@ STRINGS = {
                        "you in a signed token in the URL. So there is no way to open someone "
                        "else's report by guessing a link, and nothing for us to hand over on "
                        "request — we don't have it."),
+    "trust.local_h": "You can send us nothing at all",
+    "trust.local_p": ("Everything below describes how our server behaves, and you cannot verify "
+                      "that by reading it. So there is a local build: it checks the file on your "
+                      "own machine and makes no network calls. Not a mode and not a promise — the "
+                      "engine is open and the ban is held by a test that runs the whole analysis "
+                      "with the socket replaced by one that raises. "
+                      "<a href=\"https://github.com/caspershes/plc-lint/releases/latest\" rel=\"noopener\">Download for Windows</a> · "
+                      "<a href=\"https://github.com/caspershes/plc-lint\" rel=\"noopener\">sources</a>"),
     "trust.log_h": "What goes into the shared statistics (Free)",
     "trust.log_p": ("Exactly these fields, one line per analysis. This list isn't a paraphrase — "
                     "it comes from the code, and a test keeps the two in sync, otherwise it "
