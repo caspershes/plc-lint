@@ -129,7 +129,12 @@ STRINGS = {
                       "Один .exe, без установки и без Python: перетащите на него экспорт — "
                       "рядом появится тот же отчёт."),
     "index.local_btn": "Скачать для Windows",
-    "index.local_note": "исходники и версия для Linux/macOS — на GitHub",
+    "index.local_note": "Linux/macOS: <code>python cli.py project.xml</code> · исходники на GitHub",
+    "index.path_upload": "Проверить прямо здесь",
+    "index.ci_note": ('Проект лежит в git? <code>uses: caspershes/plc-lint@v1</code> — '
+                      '<a href="https://github.com/marketplace/actions/plc-lint" rel="noopener" '
+                      'data-ym-goal="ci_action">GitHub Action</a> роняет сборку на находках '
+                      'уровня high.'),
     "index.sev_high": "Из-за этого контроллер встанет или пойдёт вразнос ({n})",
     "index.sev_medium": "Тихие дефекты: работает, но не так, как задумано ({n})",
     "index.sev_low": "Стиль и сопровождаемость ({n})",
@@ -709,31 +714,41 @@ STRINGS = {
     "plan.popular": "popular",
 
     # --- index ---
-    "index.title": "PLC Lint — check your PLCopenXML export",
-    "index.h1": "Inherited someone else's PLC project? See what you got",
-    "index.lead": ("Upload a <strong>PLCopenXML</strong> export — in 5 seconds you get a report on "
-                   "what is actually in that code: tag typos, uncalled timers, unreachable curve "
-                   "branches, lost fractions, dead code. Checking your own project before handover "
-                   "works exactly the same."),
+    "index.title": "PLC Lint — static analysis for PLCopenXML exports",
+    # Английская главная бьёт не в «примите чужой проект» (это ситуация редкая), а в то,
+    # что верно для каждого: проект собрался, и это ничего не доказывает.
+    "index.h1": "Your PLC project compiles. That doesn't mean it works.",
+    "index.lead": ("PLC Lint reads a <strong>PLCopenXML</strong> export and finds what the compiler "
+                   "accepts without a word: a timer nobody calls, a setpoint truncated before it is "
+                   "used, a division by a variable that is zero, a branch that can never run. "
+                   "{n} checks, about 10 seconds, no signup."),
     "index.drop_hint": "drag a .xml here or choose a file",
     "index.demo_btn": "No file? Open a sample report",
     "index.no_file_hint": ('No export at hand? It takes half a minute in CODESYS: '
                            '<a href="/export-guide" target="_blank" rel="noopener" '
                            'data-ym-goal="home_howto">Project → Export PLCopenXML →</a>'),
-    "index.local_h": "Not allowed to upload customer code?",
-    "index.local_p": ("Then don't. The local build checks the file on your own machine and "
-                      "<strong>makes no network calls at all</strong> — not a promise but a "
-                      "property of the program: the engine is open and the ban is enforced by a "
-                      "test. A single .exe, no install and no Python: drop an export onto it and "
-                      "the same report appears next to the file."),
+    "index.local_h": "Or run it on your own machine",
+    "index.local_p": ("Your customer's export is their property, and sending it to somebody "
+                      "else's server is rarely your call. So don't: the local build is one .exe "
+                      "— no install, no Python, <strong>no network calls at all</strong>. Drop an "
+                      "export onto it and the same report appears next to the file."),
     "index.local_btn": "Download for Windows",
-    "index.local_note": "sources and Linux/macOS build are on GitHub",
+    "index.local_note": "Linux/macOS: <code>python cli.py project.xml</code> · MIT on GitHub",
+    "index.path_upload": "Check it here",
+    "index.ci_note": ('Project in git? <code>uses: caspershes/plc-lint@v1</code> — '
+                      '<a href="https://github.com/marketplace/actions/plc-lint" rel="noopener" '
+                      'data-ym-goal="ci_action">the GitHub Action</a> breaks the build on '
+                      'high-severity findings.'),
     "index.sev_high": "Will stop the controller or send it out of control ({n})",
     "index.sev_medium": "Quiet defects: it runs, but not as intended ({n})",
     "index.sev_low": "Style and maintainability ({n})",
     "index.rule_total": "· {n} checks in total",
-    "index.privacy": ('The file is processed <strong>in memory</strong> and never written to disk — '
-                      'neither your code nor POU names stay with us. '
+    # Западный покупатель спотыкается не о цену, а о «кто вы такие»: отвечаем тем,
+    # что проверяемо — открытым кодом и локальным запуском, а не обещанием.
+    "index.privacy": ('<strong>You don\'t have to trust us.</strong> The analyzer is open source '
+                      '(MIT) and the local build makes no network calls at all — enforced by a '
+                      'test, not by a promise. Uploaded here, the file is processed in memory and '
+                      'never written to disk. '
                       '<a href="/trust" data-ym-goal="home_trust">What happens to your code →</a>'),
     "index.profile_opt": ("Also check against the <strong>PLCopen naming</strong> standard "
                           "(type prefixes on names)"),
