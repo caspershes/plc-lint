@@ -131,6 +131,17 @@ STRINGS = {
     "index.local_btn": "Скачать для Windows",
     "index.local_note": "Linux/macOS: <code>python cli.py project.xml</code> · исходники на GitHub",
     "index.path_upload": "Проверить прямо здесь",
+    "index.learn_link": "Разборы отдельных ошибок →",
+    "learn.title": "Ошибки, которые компилятор пропускает — PLC Lint",
+    "learn.meta_desc": ("Разборы дефектов, которые собираются без единого предупреждения в CODESYS "
+                        "и TwinCAT: что происходит на контроллере, почему компилятор молчит и как "
+                        "найти это у себя в проекте."),
+    "learn.h1": "Ошибки, которые компилятор принимает — по одной",
+    "learn.lead": ("Каждая страница — один дефект, который собирается без предупреждения: что он "
+                   "делает на контроллере, почему компилятор не помогает и как найти его у себя "
+                   "в проекте, с инструментом или руками."),
+    "learn.nav": "Все разборы",
+    "learn.more": "Другие разборы",
     "index.ci_note": ('Проект лежит в git? <code>uses: caspershes/plc-lint@v1</code> — '
                       '<a href="https://github.com/marketplace/actions/plc-lint" rel="noopener" '
                       'data-ym-goal="ci_action">GitHub Action</a> роняет сборку на находках '
@@ -735,6 +746,17 @@ STRINGS = {
     "index.local_btn": "Download for Windows",
     "index.local_note": "Linux/macOS: <code>python cli.py project.xml</code> · MIT on GitHub",
     "index.path_upload": "Check it here",
+    "index.learn_link": "Bugs explained one by one →",
+    "learn.title": "PLC bugs the compiler accepts — PLC Lint",
+    "learn.meta_desc": ("Detailed write-ups of defects that compile clean in CODESYS and TwinCAT: "
+                        "what happens on the controller, why the compiler stays silent, and how "
+                        "to find each one in your own project."),
+    "learn.h1": "Bugs the compiler accepts, one at a time",
+    "learn.lead": ("Each page takes a single defect that builds without a warning: what it does on "
+                   "the controller, why the compiler can't help, and how to find it in your own "
+                   "project — with or without a tool."),
+    "learn.nav": "All write-ups",
+    "learn.more": "Other write-ups",
     "index.ci_note": ('Project in git? <code>uses: caspershes/plc-lint@v1</code> — '
                       '<a href="https://github.com/marketplace/actions/plc-lint" rel="noopener" '
                       'data-ym-goal="ci_action">the GitHub Action</a> breaks the build on '
@@ -1325,6 +1347,8 @@ ACCEPTANCE_Q = {
     "param-channel-mismatch": "В вызове блока параметр одного канала получает сигнал другого канала ({n}). Это осознанная перекрёстная связь или следы копирования?",
     "index-mismatch": "Строка расставляет индексы иначе, чем остальные строки той же группы ({n}). Это исключение по проекту?",
     "self-enable": "Команда пуска получена из выхода, который в том же скане зависит от обратной связи этого же оборудования ({n}). Как контур запускается из состояния «стоит»?",
+    "timer-reset-by-own-condition": "Таймер отсчитывает по переменной, которую гасят ниже в той же ветви ({n}). Какая выдержка здесь задумана и чем она обеспечена?",
+    "always-false-condition": "Есть условия, которые после подстановки значений этого же скана не выполняются никогда ({n}). Что должно было происходить по этим условиям?",
     "array-bounds": "Обращение за границу массива ({n}). Чем это ограничено в рантайме?",
     "infinite-loop": "Цикл без условия выхода ({n}). Что удержит скан задачи от зависания?",
     "modbus-address-duplicate": "Двум и более модулям назначен один адрес на шине ({n}). Какой из них отвечает на опрос?",
@@ -1361,6 +1385,8 @@ ACCEPTANCE_Q = {
     "param-channel-mismatch": "In a block call one channel's parameter is fed from another channel ({n}). Is that a deliberate cross-link or a leftover from copying?",
     "index-mismatch": "A line indexes differently from the rest of its group ({n}). Is that a project-specific exception?",
     "self-enable": "A start command is derived from an output that, within the same scan, depends on this equipment's own feedback ({n}). How does the loop start from standstill?",
+    "timer-reset-by-own-condition": "A timer runs on a variable that is cleared further down the same branch ({n}). What delay was intended here, and what provides it?",
+    "always-false-condition": "Some conditions never hold once same-scan assignments are substituted ({n}). What was supposed to happen on those conditions?",
     "array-bounds": "An access beyond the array bounds ({n}). What limits it at runtime?",
     "infinite-loop": "A loop with no exit condition ({n}). What stops the task scan from hanging?",
     "modbus-address-duplicate": "Two or more modules share one bus address ({n}). Which one answers the poll?",
@@ -1437,6 +1463,8 @@ RULE_SHORT = {
     "family-gap": "объявлено у всех каналов, пишется у всех кроме одного",
     "param-channel-mismatch": "авария насоса 1 приходит на вход насоса 2",
     "self-enable": "стоит → нет разрешения → нет команды → стоит",
+    "timer-reset-by-own-condition": "пауза живёт один цикл задачи: вход таймера гасят ниже по ветви",
+    "always-false-condition": "`NOT X AND X` после подстановки: строка в журнале есть, защиты нет",
     "heating-ai-no-range-check": "обрыв Pt1000 приедет в регулятор как честные 0 °C (профиль)",
     "int-division": "<code>5/2</code> даст 2 — дробь отбрасывается",
     "real-to-time-mul": "дробная уставка времени теряется до конверсии",
@@ -1473,6 +1501,8 @@ RULE_SHORT = {
     "family-gap": "declared for all four boilers, written for three",
     "param-channel-mismatch": "pump 1's alarm arrives on pump 2's input",
     "self-enable": "stopped → no permission → no command → stopped",
+    "timer-reset-by-own-condition": "the pause lasts one task cycle — the timer input is dropped below",
+    "always-false-condition": "`NOT X AND X` after substitution: listed in the log, no protection",
     "heating-ai-no-range-check": "a broken Pt1000 reaches the controller as a solid 0 °C (profile)",
     "int-division": "<code>5/2</code> yields 2 — the fraction is dropped",
     "real-to-time-mul": "a fractional time setpoint is lost before conversion",
@@ -1533,6 +1563,8 @@ RULE_HELP = {
     "param-channel-mismatch": "В вызове функционального блока имя параметра говорит про один канал, а значение взято из другого: `bPump2_Fault := gvl.alarm_nasos_CO1`. Правило срабатывает только когда в этом же вызове нумерация каналов доказана — есть согласованные пары минимум для двух каналов. Последствие тихое и опасное: аварийный насос считается исправным и выбирается для работы, защита не срабатывает, а по журналу всё выглядит штатно.",
     "index-mismatch": "В группе однотипных строк отношение между позициями индексов держится почти везде, а в одной строке нарушено: одиннадцать строк пишут в свой канал, двенадцатая — в чужой. Так выглядит копипаст соседней ветки с неполной перенумерацией. Правило не сравнивает строки целиком: совпадение чисел из разных измерений (номер котла и номер блока аварий) — норма, и оно учтено. Признак эвристический: перед правкой посмотрите, не является ли эта строка осознанным исключением.",
     "self-enable": "Команда пуска получена из выхода функционального блока, который в том же скане вычисляется из своего входа, а на этот вход подана обратная связь того же оборудования: факт вращения насоса, положение задвижки, «агрегат работает». Получается замкнутый круг — оборудование стоит, значит разрешения нет, значит команды нет, значит оно продолжает стоять. Контур не запускается вообще, причём на стенде с прокрученным вручную приводом всё выглядит исправным. Ключевое слово — «в том же скане»: выход, который зависит от входа через память (счётчик пусков, таймер, триггер), в цепочке команды совершенно законен, и правило его не трогает.",
+    "timer-reset-by-own-condition": "Таймер считает по переменной, которую ниже в той же ветви гасят на всех путях. Скан N: вход TRUE, отсчёт пошёл, переменную сбросили. Скан N+1: вход уже FALSE, таймер обнулён вместе с накопленным временем, а условие, которое ждало выдержки, открыто. Пауза живёт один цикл задачи вместо уставки — на боевом объекте это 0,01 с при заданных 30 с. Код компилируется, читается как правильный, уставка есть на экране, оператор её крутит, и она ни на что не влияет. Правило смотрит дерево ветвей, а не соседство строк: сброс под условием (`IF T.Q THEN V := FALSE`) — это штатный одновыстрел, таймер успевает отсчитать выдержку, и такой код правило не трогает.",
+    "always-false-condition": "Условие, которое после подстановки присваиваний этого же скана оказывается тождественно ложным (или тождественно истинным). Классика: одна программа формирует команду от датчика, другая проверяет аварию «команда есть, а датчика нет» — и после подстановки выходит `NOT X AND X`, то есть FALSE при любом X. Авария физически не может сработать: строка в журнале есть, защиты нет. Глазами это не ловится, потому что присваивание и проверка лежат в разных POU, а между ними — порядок вызова из PLC_PRG. Правило подставляет только то, что в этом скане известно точно: присваивание должно покрывать все пути исполнения, а программа-источник — вызываться раньше. Если переменной присвоено в нескольких ветвях, подставляется каждое значение, и правило срабатывает лишь когда константа выходит при всех.",
     "plcopen-naming": "Стандарт PLCopen: имя переменной начинается с префикса по типу (BOOL→x, INT→i, REAL→r, DINT→di, TIME→t, WORD→w …). Опциональная проверка соответствия стандарту.",
     "naming": "Односимвольные имена (кроме счётчиков i/j/k/n) нечитаемы при сопровождении. I/O-теги и пины FB не трогаем.",
     "magic-number": "Крупная/дробная сырая константа без имени — при правке уставки легко пропустить и трудно понять смысл. Вынесите в VAR CONSTANT. Индексы массивов, границы FOR и мелкие целые (<16) не считаются; одинаковые константы объединены по значению.",
@@ -1569,6 +1601,8 @@ RULE_HELP = {
     "param-channel-mismatch": "In a function block call the parameter name refers to one channel while the value comes from another: `bPump2_Fault := gvl.alarm_nasos_CO1`. The rule fires only when channel numbering is proven within the same call — consistent pairs exist for at least two channels. The consequence is quiet and dangerous: a faulty pump is treated as healthy and picked for duty, the interlock never fires, and the log looks perfectly normal.",
     "index-mismatch": "Across a group of similar lines the relation between index positions holds nearly everywhere but is broken in one line: eleven lines write to their own channel, the twelfth writes to someone else's. That is what a copied neighbouring branch with partial renumbering looks like. The rule does not compare whole lines: numbers from different dimensions (boiler number and alarm block number) coincide routinely, and that case is accounted for. This is a heuristic — before changing anything, check whether the line is a deliberate exception.",
     "self-enable": "A start command is derived from a function block output that is computed from its own input within the same scan, while that input is fed with the equipment's own feedback: pump rotation, valve position, “unit running”. The result is a deadlock — the equipment is stopped, so there is no permission, so there is no command, so it stays stopped. The loop never starts, and on a bench with the drive spun by hand everything looks fine. The phrase “within the same scan” is what matters: an output that depends on the input through memory (a start counter, a timer, an edge trigger) is perfectly legitimate in the command chain, and the rule leaves it alone.",
+    "timer-reset-by-own-condition": "A timer counts on a variable that is cleared on every path further down the same branch. Scan N: the input is TRUE, counting starts, the variable is dropped. Scan N+1: the input is already FALSE, the timer is reset together with the accumulated time, and the condition that was waiting for the delay is open. The pause lasts one task cycle instead of the setpoint — on a live site that was 0.01 s against the 30 s configured. The code compiles, reads as correct, the setpoint is on the screen, the operator adjusts it, and it changes nothing. The rule looks at the branch tree, not at adjacent lines: a reset under a condition (`IF T.Q THEN V := FALSE`) is the normal one-shot pattern, the timer does complete its delay, and such code is left alone.",
+    "always-false-condition": "A condition that becomes identically false (or identically true) once same-scan assignments are substituted. The classic shape: one program derives a command from a sensor, another checks the alarm “command present but sensor absent” — substitution turns it into `NOT X AND X`, i.e. FALSE for any X. The alarm physically cannot fire: it is listed in the log, but there is no protection. The eye does not catch it because the assignment and the check live in different POUs, with the PLC_PRG call order between them. The rule substitutes only what is known for certain within the scan: the assignment must cover every execution path, and the source program must be called earlier. If a variable is assigned in several branches, every value is substituted and the rule fires only when the result is constant for all of them.",
     "plcopen-naming": "PLCopen standard: a variable name starts with a type prefix (BOOL→x, INT→i, REAL→r, DINT→di, TIME→t, WORD→w …). An optional conformance check.",
     "naming": "Single-character names (other than counters i/j/k/n) are unreadable during maintenance. I/O tags and FB pins are left alone.",
     "magic-number": "A large/fractional raw constant without a name — easy to miss when changing a setpoint and hard to understand. Move it to a VAR CONSTANT. Array indices, FOR bounds and small integers (<16) don't count; equal constants are grouped by value.",
@@ -1664,6 +1698,14 @@ RULE_FIX = {
     "self-enable": [
         "Заведите в команду выход СОСТОЯНИЯ, а не разрешающий выход, содержащий сам вход: `NOT bProtBlocked1` вместо `bStartAllow`. Защита при этом продолжает работать — блокировка по числу пусков никуда не девается.",
         "Проверьте, что подано на вход блока: команда на пуск и факт вращения — разные сигналы, и подмена одного другим ловится только на объекте.",
+    ],
+    "timer-reset-by-own-condition": [
+        "Разведите «что отсчитываем» и «что гасим»: завести таймер отдельным флагом удержания (`switching`), который ставится при входе в переключение и снимается по `T.Q`, а условие отсчёта подавать от этого флага.",
+        "Проверьте уставку на объекте замером, а не чтением кода: такая пауза отрабатывает один цикл задачи, и на экране это выглядит как мгновенное переключение при любой уставке.",
+    ],
+    "always-false-condition": [
+        "Берите команду не от того же сигнала, который проверяете: авария «команда есть, датчика нет» работает только когда в команде этого датчика нет сомножителем.",
+        "Проверьте и промежуточную переменную, а не только итоговое выражение: правка в одну строку вернула этот же дефект в то же место во второй раз.",
     ],
     "plcopen-naming": [
         "Переименуйте по таблице префиксов: `value : REAL` → `rValue`, `cnt : INT` → `iCnt`.",
@@ -1793,6 +1835,14 @@ RULE_FIX = {
     "self-enable": [
         "Feed the STATE output into the command instead of a permission output that contains the input itself: `NOT bProtBlocked1` rather than `bStartAllow`. The protection keeps working — the start-count lockout is unaffected.",
         "Check what is wired to the block input: the start command and the running feedback are different signals, and swapping one for the other only shows up on site.",
+    ],
+    "timer-reset-by-own-condition": [
+        "Separate “what we time” from “what we clear”: arm the timer from a dedicated hold flag (`switching`) that is set when the switchover starts and cleared on `T.Q`, and feed the run condition from that flag.",
+        "Verify the delay on site by measurement, not by reading the code: a pause like this expires in one task cycle, and on the screen it looks like an instant switchover at any setpoint.",
+    ],
+    "always-false-condition": [
+        "Take the command from a source other than the signal being checked: the alarm “command present, sensor absent” only works when the command does not contain that sensor as a factor.",
+        "Check the intermediate variable as well, not just the final expression: the same defect came back a second time in the same place through a one-line edit of the source.",
     ],
     "plcopen-naming": [
         "Rename by the prefix table: `value : REAL` → `rValue`, `cnt : INT` → `iCnt`.",
@@ -1953,6 +2003,8 @@ RULE_TITLE = {
     "param-channel-mismatch": "Параметр канала получает чужой канал",
     "index-mismatch": "Строка расставляет индексы иначе, чем группа",
     "self-enable": "Команда зависит от собственной обратной связи",
+    "timer-reset-by-own-condition": "Таймер гасит собственное условие отсчёта",
+    "always-false-condition": "Условие не выполнится ни при каких значениях",
     "plcopen-naming": "Имя не по стандарту PLCopen",
     "cfc-div-zero": "CFC: деление на литеральный ноль",
 },
@@ -1989,6 +2041,8 @@ RULE_TITLE = {
     "param-channel-mismatch": "Channel parameter fed from another channel",
     "index-mismatch": "Line indexes differently from its group",
     "self-enable": "Command depends on its own feedback",
+    "timer-reset-by-own-condition": "Timer cleared by its own run condition",
+    "always-false-condition": "Condition can never be true",
     "plcopen-naming": "Name off the PLCopen standard",
     "cfc-div-zero": "CFC: division by a literal zero",
 },
@@ -2029,6 +2083,8 @@ DETAIL = {
     "param-channel-mismatch": "канал {ch} получает значение канала {other}: в вызове `{fb}` имя параметра говорит про канал {ch}, а сигнал взят из {other}",
     "index-mismatch": "позиция {p1} и позиция {p2} совпадают в {eq} строках группы из {total}, а здесь различаются ({v1} против {v2}) — похоже, строку скопировали и перенумеровали не полностью",
     "self-enable": "разрешение на пуск `{cmd}` получено из `{fb}.{out}`, который в том же скане равен функции входа `{inp}`, а на этот вход подана обратная связь `{sig}` того же канала — команда не появится, пока оборудование не работает, а работать оно не начнёт без команды",
+    "timer-reset-by-own-condition": "таймер `{timer}` отсчитывает по `{var}`, а `{var}` гасится в строке {rl} на всех путях этой же ветви — на следующем скане вход уже FALSE, накопленное время обнулено, и выдержка живёт один цикл задачи вместо уставки",
+    "always-false-condition": "{what} всегда {val}, если подставить значения этого же скана: {steps}",
     "plcopen-naming": "{n} имён не по PLCopen: {ex}{more}",
     "cfc-div-zero": "делитель блока {op} подключён к литеральному 0 → гарантированное деление на ноль",
 },
@@ -2065,6 +2121,8 @@ DETAIL = {
     "param-channel-mismatch": "channel {ch} is fed from channel {other}: in call `{fb}` the parameter name says channel {ch}, but the signal comes from {other}",
     "index-mismatch": "positions {p1} and {p2} match in {eq} of {total} lines in this group but differ here ({v1} vs {v2}) — the line was likely copied and renumbered only partially",
     "self-enable": "the start permission `{cmd}` comes from `{fb}.{out}`, which within the same scan is a function of input `{inp}`, and that input is fed with the feedback `{sig}` of the same channel — the command never appears until the equipment runs, and it cannot start running without the command",
+    "timer-reset-by-own-condition": "timer `{timer}` runs on `{var}`, and `{var}` is cleared at line {rl} on every path of the same branch — on the next scan the input is already FALSE, the accumulated time is gone, and the delay lasts one task cycle instead of the setpoint",
+    "always-false-condition": "{what} is always {val} once same-scan values are substituted: {steps}",
     "plcopen-naming": "{n} names off PLCopen: {ex}{more}",
     "cfc-div-zero": "the divisor of the {op} block is wired to a literal 0 → a guaranteed division by zero",
 },
@@ -2090,6 +2148,9 @@ TERM = {
     "chk.array-bounds": "границы массивов", "chk.div-zero": "деление на ноль",
     "chk.range": "выход за диапазон", "chk.pointer": "разыменование указателя",
     "and_more": "и ещё {k}",
+    "af.cond": "условие", "af.in": "вход таймера",
+    "af.assign": "правая часть присваивания",
+    "af.false": "ЛОЖНО", "af.true": "ИСТИННО", "af.at_line": ", строка {n}",
 },
 "en": {
     "cat.controller": "Controller", "cat.io": "I/O module",
@@ -2109,6 +2170,9 @@ TERM = {
     "chk.array-bounds": "array bounds", "chk.div-zero": "division by zero",
     "chk.range": "range overflow", "chk.pointer": "pointer dereference",
     "and_more": "and {k} more",
+    "af.cond": "the condition", "af.in": "the timer input",
+    "af.assign": "the right-hand side",
+    "af.false": "FALSE", "af.true": "TRUE", "af.at_line": ", line {n}",
 },
 }
 

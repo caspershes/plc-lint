@@ -1,11 +1,18 @@
 # PLC Lint — rule reference
 
-**34 checks.** Each entry says what it reads and how to fix it. Run them on your own export at [plc-linter.com](https://plc-linter.com) — or on the [example project](examples/).
+**36 checks.** Each entry says what it reads and how to fix it. Run them on your own export at [plc-linter.com](https://plc-linter.com) — or on the [example project](examples/).
 
 Severity: 🔴 high · 🟠 medium · ⚪ low.
 
 
-## 🔴 High (13)
+## 🔴 High (15)
+
+### `always-false-condition` — Condition can never be true
+**Reads:** A condition that becomes identically false (or identically true) once same-scan assignments are substituted. The classic shape: one program derives a command from a sensor, another checks the alarm “command present but sensor absent” — substitution turns it into `NOT X AND X`, i.e. FALSE for any X. The alarm physically cannot fire: it is listed in the log, but there is no protection. The eye does not catch it because the assignment and the check live in different POUs, with the PLC_PRG call order between them. The rule substitutes only what is known for certain within the scan: the assignment must cover every execution path, and the source program must be called earlier. If a variable is assigned in several branches, every value is substituted and the rule fires only when the result is constant for all of them.
+
+**Fix:**
+- Take the command from a source other than the signal being checked: the alarm “command present, sensor absent” only works when the command does not contain that sensor as a factor.
+- Check the intermediate variable as well, not just the final expression: the same defect came back a second time in the same place through a one-line edit of the source.
 
 ### `array-bounds` — Array index out of bounds
 **Reads:** A constant index falls outside the declared ARRAY[lo..hi] bounds — reaching this line reads/writes memory that isn't yours. Without active implicit checks the runtime won't intercept it. Checked for one-dimensional arrays with numeric bounds and a literal index.
@@ -77,6 +84,13 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 **Fix:**
 - Feed the STATE output into the command instead of a permission output that contains the input itself: `NOT bProtBlocked1` rather than `bStartAllow`. The protection keeps working — the start-count lockout is unaffected.
 - Check what is wired to the block input: the start command and the running feedback are different signals, and swapping one for the other only shows up on site.
+
+### `timer-reset-by-own-condition` — Timer cleared by its own run condition
+**Reads:** A timer counts on a variable that is cleared on every path further down the same branch. Scan N: the input is TRUE, counting starts, the variable is dropped. Scan N+1: the input is already FALSE, the timer is reset together with the accumulated time, and the condition that was waiting for the delay is open. The pause lasts one task cycle instead of the setpoint — on a live site that was 0.01 s against the 30 s configured. The code compiles, reads as correct, the setpoint is on the screen, the operator adjusts it, and it changes nothing. The rule looks at the branch tree, not at adjacent lines: a reset under a condition (`IF T.Q THEN V := FALSE`) is the normal one-shot pattern, the timer does complete its delay, and such code is left alone.
+
+**Fix:**
+- Separate “what we time” from “what we clear”: arm the timer from a dedicated hold flag (`switching`) that is set when the switchover starts and cleared on `T.Q`, and feed the run condition from that flag.
+- Verify the delay on site by measurement, not by reading the code: a pause like this expires in one task cycle, and on the screen it looks like an instant switchover at any setpoint.
 
 ### `uncalled-timer` — Uncalled timer/trigger
 **Reads:** A timer/trigger instance is read (.Q/.ET) or written (.IN), but the FB itself is never called name(...) — it never ticks, the output stays in its initial state.

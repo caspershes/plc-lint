@@ -1050,6 +1050,529 @@ def polarity_signal(pous):
             "polarity_perepad_minority_pct": round(100 * minority / total) if total else 0}
 
 
+# ---------- разбор ST на дерево ветвей (нужен двум правилам ниже) ----------
+# Условие в ST не содержит `;`, поэтому `[^;]*?` — надёжная граница для IF..THEN.
+# Сканируем в ДВА прохода: сначала структурные слова, потом текст между ними режем
+# по `;` на операторы. Один проход с «оператором» в альтернативах не годится: `[^;]+;`
+# стартует раньше ключевого слова и съедает `IF ... THEN` вместе с телом ветви.
+_ST_KW = re.compile(r"""
+      (?P<endif>\bEND_IF\b)
+    | (?P<elsif>\bELSIF\b(?P<ec>[^;]*?)\bTHEN\b)
+    | (?P<else>\bELSE\b)
+    | (?P<if>\bIF\b(?P<ic>[^;]*?)\bTHEN\b)
+    | (?P<case>\bCASE\b[^;]*?\bOF\b) | (?P<endcase>\bEND_CASE\b)
+    | (?P<for>\bFOR\b[^;]*?\bDO\b)   | (?P<endfor>\bEND_FOR\b)
+    | (?P<while>\bWHILE\b[^;]*?\bDO\b) | (?P<endwhile>\bEND_WHILE\b)
+    | (?P<repeat>\bREPEAT\b) | (?P<until>\bUNTIL\b[^;]*?\bEND_REPEAT\b)
+""", re.I | re.S | re.X)
+_ST_OPEN = ("case", "for", "while", "repeat")
+_ST_CLOSE = ("endcase", "endfor", "endwhile", "until")
+_ST_KINDS = ("endif", "elsif", "else", "if", "case", "endcase", "for", "endfor",
+             "while", "endwhile", "repeat", "until")
+
+
+def st_blocks(body):
+    """ST → узлы: {kind:'stmt',line,text} | {kind:'if',line,has_else,branches:[{cond,line,
+    items,is_else}]} | {kind:'loop',line,items}. CASE/FOR/WHILE — ветвь НЕ исчерпывающая."""
+    src = blank_comments(body or "")
+    root = []
+    stack = [{"kind": "seq", "cur": root}]
+
+    def lineno(pos):
+        return src[:pos].count("\n") + 1
+
+    def flush(a, b):
+        pos = a
+        for part in re.split(r"(;)", src[a:b]):
+            if part == ";":
+                pos += 1
+                continue
+            txt = part.strip()
+            if txt:
+                stack[-1]["cur"].append(
+                    {"kind": "stmt", "text": txt + ";",
+                     "line": lineno(pos + len(part) - len(part.lstrip()))})
+            pos += len(part)
+
+    prev = 0
+    for m in _ST_KW.finditer(src):
+        flush(prev, m.start())
+        prev = m.end()
+        kind = next(k for k in _ST_KINDS if m.group(k) is not None)
+        line = lineno(m.start())
+        cur = stack[-1]["cur"]
+        if kind == "if":
+            node = {"kind": "if", "line": line, "has_else": False,
+                    "branches": [{"cond": m.group("ic"), "line": line,
+                                  "items": [], "is_else": False}]}
+            cur.append(node)
+            stack.append({"kind": "if", "node": node, "cur": node["branches"][0]["items"]})
+        elif kind in ("elsif", "else"):
+            if stack[-1]["kind"] != "if":
+                continue          # ELSE у CASE — не ветвь IF
+            node = stack[-1]["node"]
+            br = {"cond": m.group("ec") if kind == "elsif" else "", "line": line,
+                  "items": [], "is_else": kind == "else"}
+            node["branches"].append(br)
+            node["has_else"] = node["has_else"] or kind == "else"
+            stack[-1]["cur"] = br["items"]
+        elif kind == "endif":
+            if stack[-1]["kind"] == "if":
+                stack.pop()
+        elif kind in _ST_OPEN:
+            node = {"kind": "loop", "line": line, "items": []}
+            cur.append(node)
+            stack.append({"kind": "loop", "node": node, "cur": node["items"]})
+        elif kind in _ST_CLOSE:
+            if stack[-1]["kind"] == "loop":
+                stack.pop()
+    flush(prev, len(src))
+    return root
+
+
+_ST_ASSIGN = re.compile(r"^\s*([A-Za-z_][\w.]*(?:\[[^\]]*\])?)\s*:=\s*(.+?);?\s*$", re.S)
+
+
+def st_key(name):
+    """Ключ переменной: регистр не значащий, префикс `gvl.` снят (в проектах с
+    qualified_only глобал пишется `gvl.X`, а в GVL объявлен как `X`)."""
+    k = (name or "").strip().lower()
+    return k[4:] if k.startswith("gvl.") else k
+
+
+def st_assignment(text):
+    m = _ST_ASSIGN.match(text)
+    if not m or "(" in m.group(1):
+        return None
+    return m.group(1).strip(), m.group(2).strip()
+
+
+def st_assigned_in(items):
+    """Всё, чему присваивается внутри узлов (рекурсивно)."""
+    out = set()
+    for it in items:
+        if it["kind"] == "stmt":
+            a = st_assignment(it["text"])
+            if a:
+                out.add(st_key(a[0]))
+        elif it["kind"] == "if":
+            for b in it["branches"]:
+                out |= st_assigned_in(b["items"])
+        else:
+            out |= st_assigned_in(it["items"])
+    return out
+
+
+def st_defs(items):
+    """Исчерпывающие присваивания ветви: {ключ: [(rhs, line), ...]}.
+
+    Присвоили не на всех путях — ЗАБЫВАЕМ переменную: в этом скане у неё может
+    остаться значение прошлого цикла, и подстановка была бы неверной."""
+    cur = {}
+    for it in items:
+        if it["kind"] == "stmt":
+            a = st_assignment(it["text"])
+            if a:
+                cur[st_key(a[0])] = [(a[1], it["line"])]
+        elif it["kind"] == "if" and it["has_else"]:
+            per = [st_defs(b["items"]) for b in it["branches"]]
+            common = set(per[0])
+            for d in per[1:]:
+                common &= set(d)
+            for d in per:
+                for v in d:
+                    if v not in common:
+                        cur.pop(v, None)
+            for v in common:
+                cur[v] = [x for d in per for x in d[v]]
+        else:
+            for v in st_assigned_in([it]):
+                cur.pop(v, None)
+    return cur
+
+
+# ---------- мини-решатель булевых формул ----------
+# Сравнения и вызовы функций целиком становятся непрозрачным атомом: правилу нужна
+# только структура AND/OR/XOR/NOT, арифметику оно не считает.
+_BTOK = re.compile(r"\s*(\(|\)|\bAND\b|\bOR\b|\bXOR\b|\bNOT\b|[^\s()]+)", re.I)
+_BCONT = re.compile(r"^(?:=|<>|<=|>=|<|>|\+|-|\*|/|\bMOD\b)$", re.I)
+BOOL_MAX_ATOMS = 14          # 2^14 переборов — предел, выше формулу не трогаем
+
+
+class _BoolParser:
+    def __init__(self, text):
+        self.toks, pos = [], 0
+        while pos < len(text):
+            m = _BTOK.match(text, pos)
+            if not m:
+                break
+            self.toks.append(m.group(1))
+            pos = m.end()
+        self.i = 0
+
+    def peek(self):
+        return self.toks[self.i] if self.i < len(self.toks) else None
+
+    def up(self):
+        t = self.peek()
+        return t.upper() if t else None
+
+    def _chain(self, op, nxt):
+        f = nxt()
+        if f is None:
+            return None
+        parts = [f]
+        while self.up() == op:
+            self.i += 1
+            f = nxt()
+            if f is None:
+                return None
+            parts.append(f)
+        return parts[0] if len(parts) == 1 else (op.lower(), parts)
+
+    def p_or(self):
+        return self._chain("OR", self.p_xor)
+
+    def p_xor(self):
+        return self._chain("XOR", self.p_and)
+
+    def p_and(self):
+        return self._chain("AND", self.p_not)
+
+    def p_not(self):
+        if self.up() == "NOT":
+            self.i += 1
+            f = self.p_not()
+            return None if f is None else ("not", f)
+        return self.p_prim()
+
+    def p_prim(self):
+        if self.peek() == "(":
+            save = self.i
+            self.i += 1
+            f = self.p_or()
+            if f is not None and self.peek() == ")":
+                self.i += 1
+                nxt = self.peek()
+                # `(x + 1) > y` — скобка была частью арифметики, а не булевой группой
+                if nxt is None or not _BCONT.match(nxt):
+                    return f
+            self.i = save
+        return self.p_atom()
+
+    def p_atom(self):
+        start, depth = self.i, 0
+        while self.i < len(self.toks):
+            t = self.toks[self.i]
+            u = t.upper()
+            if depth == 0 and (u in ("AND", "OR", "XOR", "NOT") or t == ")"):
+                break
+            depth += 1 if t == "(" else (-1 if t == ")" else 0)
+            self.i += 1
+        if self.i == start:
+            return None
+        raw = " ".join(self.toks[start:self.i])
+        norm = re.sub(r"\s+", "", raw).lower()
+        if norm in ("true", "1"):
+            return ("const", True)
+        if norm in ("false", "0"):
+            return ("const", False)
+        return ("atom", norm[4:] if norm.startswith("gvl.") else norm, raw)
+
+
+def bool_parse(text):
+    """Формула или None (не разобралось / остался хвост)."""
+    if not text or not text.strip():
+        return None
+    p = _BoolParser(text)
+    f = p.p_or()
+    return f if f is not None and p.i == len(p.toks) else None
+
+
+def bool_atoms(f, acc=None):
+    acc = set() if acc is None else acc
+    if f[0] == "atom":
+        acc.add(f[1])
+    elif f[0] == "not":
+        bool_atoms(f[1], acc)
+    elif f[0] in ("and", "or", "xor"):
+        for s in f[1]:
+            bool_atoms(s, acc)
+    return acc
+
+
+def bool_eval(f, env):
+    k = f[0]
+    if k == "const":
+        return f[1]
+    if k == "atom":
+        return env[f[1]]
+    if k == "not":
+        return not bool_eval(f[1], env)
+    if k == "and":
+        return all(bool_eval(s, env) for s in f[1])
+    if k == "or":
+        return any(bool_eval(s, env) for s in f[1])
+    r = False
+    for s in f[1]:
+        r ^= bool_eval(s, env)
+    return r
+
+
+def bool_const(f):
+    """True/False, если формула тождественна константе, иначе None."""
+    names = sorted(bool_atoms(f))
+    if len(names) > BOOL_MAX_ATOMS:
+        return None
+    vals = set()
+    for mask in range(1 << len(names)):
+        vals.add(bool_eval(f, {n: bool(mask >> i & 1) for i, n in enumerate(names)}))
+        if len(vals) > 1:
+            return None
+    return vals.pop() if vals else None
+
+
+# ---------- таймер сбрасывается собственным условием отсчёта ----------
+_TR_CALL = re.compile(r"\b([A-Za-z_]\w*)\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)", re.S)
+_TR_IN = re.compile(r"\bIN\s*:=\s*([^,)]+)", re.I | re.S)
+_TR_SIMPLE = re.compile(r"^[A-Za-z_][\w.]*(?:\[[^\]]*\])?$")
+_TR_TIMERS = ("TON", "TOF", "TP", "TONOF", "BLINK")
+
+
+def _tr_in_var(text):
+    """`T(IN := V)` → ('T','V'), если V — простая булева переменная, иначе None."""
+    for m in _TR_CALL.finditer(text):
+        a = _TR_IN.search(m.group(2))
+        if not a:
+            continue
+        v = a.group(1).strip()
+        if _TR_SIMPLE.match(v) and v.upper() not in ("TRUE", "FALSE"):
+            return m.group(1), v
+    return None
+
+
+def _tr_resets(items, var, start=0):
+    """Гасится ли var В НОЛЬ на ВСЕХ путях среди items[start:]? → строка или None.
+
+    Сброс — именно погашение. Любое другое присваивание (`V := alarm OR cx`) не сброс,
+    а пересчёт входа из других сигналов: с таким послаблением правило дало 9 ложных
+    из 9 на боевом 1_4pump, где четыре каскада пересчитывают stop_pause_N после вызова."""
+    k = st_key(var)
+    for it in items[start:]:
+        if it["kind"] == "stmt":
+            a = st_assignment(it["text"])
+            if not a or st_key(a[0]) != k:
+                continue
+            f = bool_parse(a[1])
+            if f is None:
+                continue
+            val = bool_const(f)
+            if val is False:
+                return it["line"]
+            if val is True:
+                return None          # взвели заново — это не сброс
+        elif it["kind"] == "if" and it["has_else"]:
+            lines = [_tr_resets(b["items"], var) for b in it["branches"]]
+            if all(lines):
+                return min(lines)    # погасили в каждой ветви — путь не обойти
+    return None
+
+
+def _tr_rearmed(items, start, inst, var):
+    """Между вызовом и сбросом таймер взвели ДРУГИМ условием → паттерн законный."""
+    for it in items[start:]:
+        if it["kind"] != "stmt":
+            continue
+        got = _tr_in_var(it["text"])
+        if got and got[0].lower() == inst.lower() and st_key(got[1]) != st_key(var):
+            return True
+    return False
+
+
+def _tr_scan(pou, items, timers, hits):
+    for i, it in enumerate(items):
+        if it["kind"] == "stmt":
+            got = _tr_in_var(it["text"])
+            if got and got[0].lower() in timers and not _tr_rearmed(items, i + 1, *got):
+                rl = _tr_resets(items, got[1], i + 1)
+                if rl:
+                    hits.append((pou, it["line"], got[0], got[1], rl,
+                                 re.sub(r"\s+", " ", it["text"]).strip()[:110]))
+        elif it["kind"] == "if":
+            for b in it["branches"]:
+                _tr_scan(pou, b["items"], timers, hits)
+        else:
+            _tr_scan(pou, it["items"], timers, hits)
+
+
+def heur_timer_reset(pous):
+    """Таймер отсчитывает по переменной, которую гасят ниже в той же ветви.
+
+    Боевой случай (пауза разгона пары раб/резерв): `pauseRazgon(IN := run_2);`, а run_2
+    гасится в обеих ветвях следующего IF. Скан N — таймер пошёл, run_2 сброшен; скан N+1 —
+    IN уже FALSE, таймер обнулён, условие открыто. Пауза живёт один цикл задачи вместо
+    уставки: на модели 0,01 с при заданных 30 с. Уставка есть на экране, оператор её
+    крутит, она ни на что не влияет.
+
+    Точность держится на том, что сброс обязан быть НА ВСЕХ ПУТЯХ после вызова в той же
+    ветви. Сброс под условием (`IF T.Q THEN V := FALSE`) — штатный одновыстрел, таймер
+    успевает отсчитать PT. Сброс в соседней ветви — тоже норма. Поэтому правило смотрит
+    дерево ветвей, а не соседство строк."""
+    hits = []
+    for name, d in pous.items():
+        body = blank_comments(d["body"])
+        # «таймер» = экземпляр, чей .Q читают в этом POU, либо объявленный TON/TOF/TP.
+        # Без этого правило ловило бы любой FB со входом IN.
+        timers = {m.group(1).lower() for m in re.finditer(r"\b([A-Za-z_]\w*)\.Q\b", body, re.I)}
+        timers |= {n.lower() for n, t in _iface_names(d.get("iface"), "localVars").items()
+                   if (t or "").upper() in _TR_TIMERS}
+        if timers:
+            _tr_scan(name, st_blocks(d["body"]), timers, hits)
+    return hits
+
+
+# ---------- условие, тождественно ложное после подстановки ----------
+_AF_IN = re.compile(r"\bIN\s*:=\s*([^,)]+)", re.I | re.S)
+_AF_CALL = re.compile(r"^\s*([A-Za-z_]\w*)\s*\(\s*\)\s*;", re.M)
+AF_MAX_COMBOS = 8            # произведение вариантов присваивания; выше — не считаем
+
+
+def _af_order(pous):
+    """Порядок вызова программ из PLC_PRG. Обязателен: подставлять можно только то,
+    что присвоено РАНЬШЕ в этом же скане. Для POU, вызванного позже, в условии живёт
+    значение прошлого цикла, и свёртка была бы неверной."""
+    main = next((n for n in pous if n.lower() in ("plc_prg", "main")), None)
+    order = []
+    if main:
+        for m in _AF_CALL.finditer(blank_comments(pous[main]["body"])):
+            order += [n for n in pous if n.lower() == m.group(1).lower() and n not in order]
+    return order + [n for n in pous if n not in order]
+
+
+def _af_alts(var, rhs_list, pou, snap, budget):
+    """Варианты формулы для одного атома + плоская цепочка «кто чему равен».
+    [] = подставлять нельзя."""
+    out = []
+    for rhs, line in rhs_list:
+        f = bool_parse(rhs)
+        if f is None:
+            return []                       # хоть один путь не разобрали — молчим
+        step = (var, rhs.strip(), pou, line)
+        subs = _af_expand(f, snap, budget - 1) if budget > 0 else []
+        out += [(g, [step] + ch) for g, ch in subs] or [(f, [step])]
+    return out
+
+
+def _af_expand(f, defs, budget):
+    """[(формула, цепочка)] — все комбинации подстановок, [] если подставить нечего.
+
+    У каждого присваивания свой снимок локалов НА МОМЕНТ присваивания. Брать итоговые
+    значения нельзя: на боевом проекте это дало ложный FALSE на штатном детекторе фронта
+    (`start_edge := (run AND PS) AND NOT run_last;` считается ДО обновления run_last,
+    то есть по значению прошлого цикла)."""
+    tables = []
+    for n in sorted(a for a in bool_atoms(f) if a in defs):
+        rhs_list, pou, hop, snap = defs[n]
+        alts = _af_alts(n, rhs_list, pou, snap, budget if hop else 0)
+        if alts:
+            tables.append((n, alts))
+    if not tables:
+        return []
+    total = 1
+    for _n, alts in tables:
+        total *= len(alts)
+    if total > AF_MAX_COMBOS:
+        return []
+    combos = [({}, [])]
+    for n, alts in tables:
+        combos = [(dict(m, **{n: a[0]}), ch + a[1]) for m, ch in combos for a in alts]
+    return [(_af_apply(f, m), ch) for m, ch in combos]
+
+
+def _af_apply(f, mapping):
+    if f[0] == "atom":
+        return mapping.get(f[1], f)
+    if f[0] == "not":
+        return ("not", _af_apply(f[1], mapping))
+    if f[0] in ("and", "or", "xor"):
+        return (f[0], [_af_apply(s, mapping) for s in f[1]])
+    return f
+
+
+def _af_check(pou, line, kind, text, defs, hits):
+    f = bool_parse(text)
+    if f is None or len(bool_atoms(f)) < 2 or bool_const(f) is not None:
+        return                      # свёрнуто без подстановки — это другое правило
+    variants = _af_expand(f, defs, 2)
+    if not variants:
+        return
+    vals = {bool_const(g) for g, _ch in variants}
+    if len(vals) != 1 or None in vals:
+        return
+    hits.append((pou, line, kind, vals.pop(),
+                 re.sub(r"\s+", " ", text).strip()[:110], variants[0][1]))
+
+
+def _af_walk(pou, items, defs, locals_, hits):
+    cur = dict(defs)
+
+    def snap():
+        return {k: v for k, v in cur.items() if k in locals_}
+
+    for it in items:
+        if it["kind"] == "stmt":
+            for m in _AF_IN.finditer(it["text"]):
+                _af_check(pou, it["line"], "in", m.group(1), cur, hits)
+            a = st_assignment(it["text"])
+            if a:
+                _af_check(pou, it["line"], "assign", a[1], cur, hits)
+                cur[st_key(a[0])] = ([(a[1], it["line"])], pou, 1, snap())
+        elif it["kind"] == "if":
+            for b in it["branches"]:
+                if not b["is_else"]:
+                    _af_check(pou, b["line"], "cond", b["cond"], cur, hits)
+                _af_walk(pou, b["items"], cur, locals_, hits)
+            if it["has_else"]:
+                for k, v in st_defs([it]).items():
+                    cur[k] = (v, pou, 1, snap())
+            else:
+                for k in st_assigned_in([it]):
+                    cur.pop(k, None)
+        else:
+            _af_walk(pou, it["items"], cur, locals_, hits)
+            for k in st_assigned_in([it]):
+                cur.pop(k, None)
+
+
+def heur_always_false(pous, decl):
+    """Условие, которое после подстановки присваиваний этого же скана тождественно
+    ложно (или истинно).
+
+    Боевой случай: одна программа формирует команду (`gvl.run_podpitka := gvl.PS_podpitka`),
+    другая проверяет её же вместе с источником (`IN := NOT gvl.PS_podpitka AND
+    gvl.run_podpitka`). После подстановки — `NOT X AND X`, всегда FALSE: авария «нет воды»
+    физически не может сработать, строка в журнале есть, защиты нет. Глазами такое не
+    ловится: у владельца тот же дефект воспроизвёлся ВТОРОЙ раз в том же месте.
+
+    Подставляем только то, что в этом скане известно точно: присваивание должно покрывать
+    все пути (st_defs), а POU-источник — вызываться раньше по PLC_PRG. Если переменной
+    присвоено в нескольких ветвях, подставляем КАЖДОЕ значение и флагуем лишь тогда, когда
+    константа выходит при всех — иначе это не дефект, а один из режимов."""
+    trees = {n: st_blocks(d["body"]) for n, d in pous.items()}
+    gdefs, hits = {}, []
+    for pou in _af_order(pous):
+        locals_ = set()
+        for tag in ("localVars", "inputVars", "outputVars", "inOutVars", "tempVars"):
+            locals_ |= {k.lower() for k in _iface_names(pous[pou].get("iface"), tag)}
+        _af_walk(pou, trees[pou], dict(gdefs), locals_, hits)
+        final = st_defs(trees[pou])
+        loc_snap = {k: (v, pou, 1, {}) for k, v in final.items() if k in locals_}
+        for k, v in final.items():
+            if k in decl or k not in locals_:
+                gdefs[k] = (v, pou, 1, loc_snap)
+    return hits
+
+
 # ---------- правила поиска багов: границы массива / бесконечный цикл / и т.д. ----------
 def _array_bounds(type_el):
     """(lower, upper) для одномерного ARRAY с целыми литеральными границами, иначе None."""
@@ -1882,6 +2405,8 @@ RULES = {
     "param-channel-mismatch": ("high", "Параметр канала получает чужой канал"),
     "index-mismatch": ("medium", "Строка расставляет индексы иначе, чем группа"),
     "self-enable": ("high", "Команда зависит от собственной обратной связи"),
+    "timer-reset-by-own-condition": ("high", "Таймер гасит собственное условие отсчёта"),
+    "always-false-condition": ("high", "Условие не выполнится ни при каких значениях"),
 }
 
 
@@ -2041,6 +2566,25 @@ def analyze(src, profiles=None, lang="ru") -> Report:
             rule="self-enable", severity=_sev("self-enable"), title=T("self-enable"),
             pou=nm, line=i, code=ln,
             detail=D("self-enable", cmd=cmd, fb=ftype, out=oname, inp=inp, sig=sig)))
+
+    for nm, i, timer, var, rl, ln in heur_timer_reset(pous):
+        findings.append(Finding(
+            rule="timer-reset-by-own-condition", severity=_sev("timer-reset-by-own-condition"),
+            title=T("timer-reset-by-own-condition"), pou=nm, line=i, code=ln,
+            detail=D("timer-reset-by-own-condition", timer=timer, var=var, rl=rl)))
+
+    for nm, i, kind, val, ln, chain in heur_always_false(pous, decl):
+        # цепочка подстановки — главное в сообщении: без неё человек видит нормальное
+        # условие и не понимает, почему оно «всегда ложно»
+        steps = " → ".join(
+            "`{}` = `{}` ({}{})".format(v, rhs, p, i18n.term(lang, "af.at_line", n=ln2))
+            for v, rhs, p, ln2 in chain)
+        findings.append(Finding(
+            rule="always-false-condition", severity=_sev("always-false-condition"),
+            title=T("always-false-condition"), pou=nm, line=i, code=ln,
+            detail=D("always-false-condition", what=i18n.term(lang, "af." + kind),
+                     val=i18n.term(lang, "af.false" if val is False else "af.true"),
+                     steps=steps)))
 
     for nm, i, p1, p2, v1, v2, eq, total, ln in heur_index_mismatch(pous):
         findings.append(Finding(
