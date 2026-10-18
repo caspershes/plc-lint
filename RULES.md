@@ -1,6 +1,6 @@
 # PLC Lint — rule reference
 
-**36 checks.** Each entry says what it reads and how to fix it. Run them on your own export at [plc-linter.com](https://plc-linter.com) — or on the [example project](examples/).
+**37 checks.** Each entry says what it reads and how to fix it. Run them on your own export at [plc-linter.com](https://plc-linter.com) — or on the [example project](examples/).
 
 Severity: 🔴 high · 🟠 medium · ⚪ low.
 
@@ -113,7 +113,7 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 - Replace the ELSIF chain with an array of curve points and interpolation.
 
 
-## 🟠 Medium (11)
+## 🟠 Medium (12)
 
 ### `case-without-else` — CASE without an ELSE branch (no default)
 **Reads:** CASE without an ELSE branch: if the selector takes a value not among the labels, nothing runs — a silent skip (a common state-machine bug).
@@ -176,6 +176,13 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 **Fix:**
 - The right-hand side probably should be another variable (typo) — check the intent.
 - If the line is redundant — remove it.
+
+### `signal-without-source` — Nothing ever raises this alarm
+**Reads:** A boolean state signal (alarm, error, fault) is read in the program's conditions, but no line of code and no module channel ever writes it. It therefore stays at zero forever: the alarm interlock never trips, the lamp on the screen never lights, the log keeps a dead entry. On site this looks like a healthy protection precisely because it never fires. The usual cause: the signal was expected from outside — the wiring was to be delivered by someone else, or the fieldbus polling was never finished — while the condition is already in the code. The rule deliberately looks only at alarm-style names and only at booleans: commands and setpoints are legitimately written from the visualisation, and sensor values come straight from a channel, and a PLCopenXML export shows neither. Anything bound to a channel in the device tree or mentioned in a graphical body is left alone.
+
+**Fix:**
+- Check where the signal is supposed to come from: if it is field wiring or fieldbus polling, bind the variable to its channel and the rule goes quiet.
+- If there will be no source, drop the condition together with the variable: a dead interlock is more dangerous than a missing one, because people rely on it.
 
 ### `timer-zero-pt` — Timer with zero delay (PT := T#0)
 **Reads:** PT is set to zero (T#0S) — the timer fires in the same scan, effectively no delay. Usually a forgotten or wrong time setpoint.

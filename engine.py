@@ -1573,6 +1573,74 @@ def heur_always_false(pous, decl):
     return hits
 
 
+# ---------- сигнал состояния читается, но его никто не формирует ----------
+# Г5 (главная грабля правила): «не присваивается в ST» ещё не значит «нет источника».
+# Команды и уставки законно пишутся с экрана визуализации, а показания датчиков — прямо
+# с канала модуля; в PLCopenXML ни того, ни другого в тексте программы не видно. Поэтому
+# проверяем только имена, семантически являющиеся сигналами СОСТОЯНИЯ, только булевы,
+# и выбрасываем всё, что привязано к каналу в дереве устройств. На боевом корпусе это
+# сняло 71 ложное срабатывание из 77: выход FB пишет глобал прямо в вызове (`=>`),
+# запись идёт в бит (`gvl.error_bits.0 := TRUE`), диагностический код канала — не BOOL.
+_SWS_STATE = re.compile(r"^(?:alarm|error|err|fault|avar|warn|trip)_|"
+                        r"_(?:alarm|avar|fault|error)$|^(?:alarm|avaria|avariya)\d*$", re.I)
+_SWS_SCREEN = re.compile(r"^(?:run|start|stop|cmd|block|manual|hand|auto|reset|kvit|ack|set|"
+                         r"mode|zadanie|rezhim)_|^(?:set|ustavka|zadanie)|"
+                         r"_(?:ustavka|zadanie|set|sp|reset|kvit|ack)$|"
+                         r"^(?:reset|kvit|ack|block|manual)$", re.I)
+_SWS_WRITE = re.compile(r"([A-Za-z_][\w.]*(?:\[[^\]]*\])?)\s*:=|"
+                        r"=>\s*([A-Za-z_][\w.]*(?:\[[^\]]*\])?)")
+_SWS_IDENT = re.compile(r"\b((?:[A-Za-z_]\w*\.)?[A-Za-z_]\w*)\b")
+_SWS_BOOL = re.compile(r"^(?:ARRAY\s*\[[^\]]*\]\s*OF\s*)?BOOL\s*$", re.I)
+
+
+def _sws_base(name):
+    """`gvl.error_bits.0` → `error_bits`: снимаем префикс gvl., индекс массива и побитовый
+    доступ. Брать последний компонент нельзя — запись в бит тогда числится записью в «0»."""
+    return st_key(re.sub(r"\[[^\]]*\]", "", name or "")).split(".")[0]
+
+
+def heur_signal_without_source(pous, decl, root):
+    """Авария читается в условии, но её никто не формирует: защита мёртвая.
+
+    Боевой случай: `alarm_kotel[1..3]` и `alarm_peregrev_kotel[1..3]` читаются в трёх местах
+    (исключение котла из каскада, общая авария, счётчик для шапки) и не присваиваются нигде —
+    обратной связи от котлов на объекте нет вообще. Каскад никогда не узнает, что котёл встал:
+    запрос висит, место в очереди не освобождается, в журнале мёртвые строки. Второй боевой
+    случай: у одиночных насосов сигнал аварии ждали от электриков, он так и не пришёл, а
+    условие блокировки пуска `NOT alarm_nasos_CO` осталось в коде и выполняется всегда.
+    """
+    io_bound = {st_key(m).split(".")[0]
+                for m in _APPVAR_RE.findall(ET.tostring(root, encoding="unicode"))}
+    # графику разбираем только по вхождению имён: отличить там чтение от записи нельзя,
+    # поэтому всё упомянутое в LD/FBD/SFC/CFC считаем имеющим источник и не трогаем
+    graph = set()
+    for pou in root.iter(q("pou")):
+        for b in pou.iter(q("body")):
+            for m in _SWS_IDENT.finditer(graphical_text(b)):
+                graph.add(_sws_base(m.group(1)))
+
+    written, read_in = set(), {}
+    for name, d in pous.items():
+        src = blank_comments(d.get("fulltext", d["body"]))
+        for m in _SWS_WRITE.finditer(src):
+            written.add(_sws_base(m.group(1) or m.group(2)))
+        # читаем ПОСЛЕ снятия левых частей: `x := 0` не делает x прочитанным
+        for m in _SWS_IDENT.finditer(_SWS_WRITE.sub(" ", src)):
+            read_in.setdefault(_sws_base(m.group(1)), set()).add(name)
+
+    hits = []
+    for var in sorted(decl):
+        k = _sws_base(var)
+        if k in written or k in io_bound or k in graph or k not in read_in:
+            continue
+        if not _SWS_BOOL.match((decl.get(var) or "").strip()):
+            continue
+        if not _SWS_STATE.search(k) or _SWS_SCREEN.search(k):
+            continue
+        hits.append((var, sorted(read_in[k])))
+    return hits
+
+
 # ---------- правила поиска багов: границы массива / бесконечный цикл / и т.д. ----------
 def _array_bounds(type_el):
     """(lower, upper) для одномерного ARRAY с целыми литеральными границами, иначе None."""
@@ -2407,6 +2475,7 @@ RULES = {
     "self-enable": ("high", "Команда зависит от собственной обратной связи"),
     "timer-reset-by-own-condition": ("high", "Таймер гасит собственное условие отсчёта"),
     "always-false-condition": ("high", "Условие не выполнится ни при каких значениях"),
+    "signal-without-source": ("medium", "Аварию никто не формирует"),
 }
 
 
@@ -2585,6 +2654,13 @@ def analyze(src, profiles=None, lang="ru") -> Report:
             detail=D("always-false-condition", what=i18n.term(lang, "af." + kind),
                      val=i18n.term(lang, "af.false" if val is False else "af.true"),
                      steps=steps)))
+
+    for var, readers in heur_signal_without_source(pous, decl, root):
+        findings.append(Finding(
+            rule="signal-without-source", severity=_sev("signal-without-source"),
+            title=T("signal-without-source"), pou=readers[0], line=0,
+            detail=D("signal-without-source", var=var, n=len(readers),
+                     readers=M(readers, 3))))
 
     for nm, i, p1, p2, v1, v2, eq, total, ln in heur_index_mismatch(pous):
         findings.append(Finding(
