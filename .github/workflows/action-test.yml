@@ -26,13 +26,31 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Фикстура лежит в examples/ (публичная выкладка) или tests/fixtures/ (основной
+      # репозиторий): workflow один на оба. Без этого в основном репозитории Action
+      # запускался по несуществующему пути, разбирал ноль файлов и падал на «не
+      # посчитаны high» — ошибка выглядела как поломка Action, хотя ломался путь.
+      - id: fx
+        shell: bash
+        run: |
+          set -euo pipefail
+          for d in examples tests/fixtures; do
+            if [ -f "$d/synthetic_bugs.xml" ]; then
+              echo "file=$d/synthetic_bugs.xml" >> "$GITHUB_OUTPUT"
+              echo "dir=$d/" >> "$GITHUB_OUTPUT"
+              echo "фикстура: $d/synthetic_bugs.xml"
+              exit 0
+            fi
+          done
+          echo "не найдена фикстура synthetic_bugs.xml"; exit 1
+
       # В фикстуре заведомо есть находки уровня high, значит шаг обязан упасть.
       # continue-on-error, чтобы проверить это, а не свалить весь прогон.
       - id: lint
         uses: ./
         continue-on-error: true
         with:
-          path: examples/synthetic_bugs.xml
+          path: ${{ steps.fx.outputs.file }}
           fail-on: high
 
       - name: Проверки
@@ -52,6 +70,6 @@ jobs:
       # обход каталога и выгрузка HTML артефактом
       - uses: ./
         with:
-          path: examples/
+          path: ${{ steps.fx.outputs.dir }}
           fail-on: none
           html: 'true'
