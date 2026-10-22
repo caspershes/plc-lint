@@ -1641,6 +1641,93 @@ def heur_signal_without_source(pous, decl, root):
     return hits
 
 
+# ---------- правила по CODESYS ExportFile: параметры модулей и экраны ----------
+# В PLCopenXML этого нет вовсе: ни «Параметров устройства», ни привязок визуализации.
+# Поэтому класс дефектов ниже не проверяет ни один статический анализатор — все читают ST.
+_EX_FMT = re.compile(r"%[-+ #0]*\d*(?:\.\d+)?[a-zA-Z%]")   # %d, %2.1f, %%, %s
+_EX_RUS = re.compile(r"[А-Яа-яЁё]")
+_EX_OFF = ("отключен", "выключен", "off", "disabled", "none")
+
+
+def _ex_label(text):
+    """Подпись без формата вывода. `%2.0f Гц` → `Гц`.
+
+    Цифры формата — не номер оборудования: на боевом проекте сравнение «номер в подписи
+    против индекса в переменной» дало 4 ложных из 4 именно на них (`act_FH1` ↔ `%2.0f Гц`)."""
+    return _EX_FMT.sub(" ", text or "").strip()
+
+
+def _ex_norm(text):
+    """Подпись для сравнения: лишние пробелы не делают подписи разными.
+    Без этого «Тек. уставка  %d °C» и «Тек. уставка %d °C» выглядели как две разные."""
+    return re.sub(r"\s+", " ", _ex_label(text)).strip().lower()
+
+
+def _ex_nums(text):
+    return [int(x) for x in re.findall(r"\d+", text or "")]
+
+
+def heur_export_devices(export):
+    """Настройки модулей, молчаливое значение которых означает «канал не работает».
+
+    → [(устройство, ключ параметра, подпись, вид)], вид ∈ sensor-off / output-off / module-off.
+
+    Канал со снятым типом датчика не оцифровывается, а переменная остаётся нулём: для
+    наружной температуры это «на улице 0 °C» и сразу неверный график отопления. Модуль
+    с `Disable_module = TRUE` исключён из опроса целиком — все его сигналы мёртвые.
+
+    Ключевая точность — «на ЗАНЯТОМ канале»: свободных входов у модуля больше, чем
+    занятых, и для них «Отключен» — правильная настройка. Занятость определяется
+    привязкой значения канала, а не кода статуса (его вешают и на свободные входы)."""
+    hits = []
+    for d in export.devices:
+        used = d.used_channels()
+        for key, label, val, _dflt, enums in d.params:
+            human = (enums or {}).get(val) or ""
+            low = human.strip().lower()
+            if key.endswith(".SensorType") and val == "0":
+                ch = "".join(re.findall(r"\d+", key.split(".")[0]))
+                if ch and ch in used:
+                    hits.append((d.name, key, label or human, "sensor-off"))
+            elif key.endswith(".OutputType") and val == "0" and (not human or low in _EX_OFF):
+                hits.append((d.name, key, label or human, "output-off"))
+            elif key.endswith("Disable_module") and val.strip().upper() == "TRUE":
+                hits.append((d.name, key, label or human, "module-off"))
+    return hits
+
+
+def heur_export_visu(export):
+    """Экраны: копипаста элемента вместе с чужой привязкой.
+
+    → [(экран, переменная, вид, подробность)], вид ∈ two-labels / index-mismatch.
+
+    Две находки одного происхождения — элемент скопировали и не поправили привязку:
+      * одна переменная выведена под разными подписями («насос 2 показывает насос 1»);
+      * номер в подписи не совпадает с индексом в переменной («Котёл 3» ↔ alarm_kotel[2]).
+    Сравниваем только осмысленные подписи (с буквами) и только однозначные номера:
+    двузначные и выше — это адреса, уставки и шкалы, там совпадать ничего не обязано."""
+    hits = []
+    for v in export.visus:
+        seen, idx = {}, []
+        for props in v.elements:
+            var = v.var_of(props)
+            if not var:
+                continue
+            label = _ex_label(v.text_of(props))
+            if not (label and _EX_RUS.search(label)):
+                continue
+            seen.setdefault(var, set()).add(_ex_norm(v.text_of(props)))
+            nt, nv = _ex_nums(label), _ex_nums(var)
+            if nt and nv and nt[-1] != nv[-1] and max(nt[-1], nv[-1]) <= 3:
+                idx.append((v.name, var, "index-mismatch", label[:60]))
+        two = {var for var, labels in seen.items() if len({s for s in labels if s}) > 1}
+        hits += [(v.name, var, "two-labels", " | ".join(sorted(s for s in seen[var] if s))[:90])
+                 for var in sorted(two)]
+        # у скопированного элемента оба признака сразу; один дефект — одна находка
+        hits += [h for h in idx if h[1] not in two]
+    return hits
+
+
 # ---------- правила поиска багов: границы массива / бесконечный цикл / и т.д. ----------
 def _array_bounds(type_el):
     """(lower, upper) для одномерного ARRAY с целыми литеральными границами, иначе None."""
@@ -2423,6 +2510,8 @@ class Report:
     device: dict = field(default_factory=dict)    # контроллер/модули/задачи
     coverage: dict = field(default_factory=dict)  # покрытие языков: {total, st, by_lang, nonst_count}
     modified: str = ""      # contentHeader@modificationDateTime — по нему определяется, какая версия новее
+    units: int = 0          # для .export: сколько объектов разобрано (модулей + экранов);
+    #                         у PLCopenXML размер проекта меряется в POU
 
     @property
     def summary(self):
@@ -2476,6 +2565,13 @@ RULES = {
     "timer-reset-by-own-condition": ("high", "Таймер гасит собственное условие отсчёта"),
     "always-false-condition": ("high", "Условие не выполнится ни при каких значениях"),
     "signal-without-source": ("medium", "Аварию никто не формирует"),
+    # только для CODESYS ExportFile (.export): в PLCopenXML параметров модулей и
+    # привязок визуализации нет вовсе
+    "channel-sensor-off": ("high", "У занятого канала снят тип датчика"),
+    "channel-output-off": ("high", "Выход модуля не настроен"),
+    "module-disabled": ("high", "Модуль исключён из опроса"),
+    "visu-two-labels": ("medium", "Одна переменная под двумя подписями"),
+    "visu-index-mismatch": ("medium", "Номер в подписи не равен индексу"),
 }
 
 
@@ -2488,7 +2584,9 @@ def quality_score(report) -> int:
     """0..100. Штраф по severity, нормированный на размер проекта (POU), чтобы крупные
     проекты не штрафовались несправедливо. Ориентир, не приговор."""
     penalty = sum(SCORE_WEIGHTS.get(f.severity, 0) for f in report.findings)
-    size = max(report.pou_count, 1)
+    # у .export нет POU: размер проекта там — число разобранных модулей и экранов,
+    # иначе балл нормировался бы на единицу и любой экспорт получал бы ноль
+    size = max(report.pou_count or report.units, 1)
     score = 100 - (penalty / size) * SCORE_FACTOR
     return max(0, min(100, round(score)))
 
@@ -2507,6 +2605,49 @@ def _sev(rule: str) -> str:
 
 def _title(rule: str) -> str:
     return RULES[rule][1]
+
+
+def analyze_export(src, lang="ru") -> Report:
+    """Разбор CODESYS ExportFile (.export): параметры модулей и экраны визуализации.
+
+    Отдельная точка входа, а не ветка внутри analyze(): формат другой, и правил по нему
+    пока пять — те, что живут вне программ. Программы в экспорте тоже есть, но их разбор
+    (ST из экспорта → те же 37 правил) — отдельная работа, здесь она не делается, и отчёт
+    честно показывает ноль POU, а не делает вид, что код проверен."""
+    import export_file                      # локальный импорт: analyze() к формату не привязана
+
+    def T(rule):
+        return i18n.rule_title(lang, rule)
+
+    def D(key, **kw):
+        return i18n.detail(lang, key, **kw)
+
+    name = "project"
+    if isinstance(src, str):
+        name = os.path.splitext(os.path.basename(src))[0]
+    ex = export_file.read(src)
+
+    findings = []
+    rule_by_kind = {"sensor-off": "channel-sensor-off", "output-off": "channel-output-off",
+                    "module-off": "module-disabled"}
+    for dev, key, label, kind in heur_export_devices(ex):
+        rule = rule_by_kind[kind]
+        findings.append(Finding(
+            rule=rule, severity=_sev(rule), title=T(rule), pou=dev, line=0,
+            detail=D(rule, dev=dev, par=key, label=label or key)))
+    for screen, var, kind, extra in heur_export_visu(ex):
+        rule = "visu-two-labels" if kind == "two-labels" else "visu-index-mismatch"
+        findings.append(Finding(
+            rule=rule, severity=_sev(rule), title=T(rule), pou=screen, line=0,
+            detail=D(rule, screen=screen, var=var, extra=extra)))
+
+    order = {"high": 0, "medium": 1, "low": 2}
+    findings.sort(key=lambda f: (order.get(f.severity, 9), f.pou, f.rule))
+    return Report(name=name, version="", pou_count=0, globals_count=0, findings=findings,
+                  units=len(ex.devices) + len(ex.visus),
+                  device={"devices": [{"name": d.name, "params": len(d.params)} for d in ex.devices],
+                          "visus": [{"name": v.name, "elements": len(v.elements)} for v in ex.visus]},
+                  coverage={"total": 0, "st": 0, "by_lang": {}, "nonst_count": 0})
 
 
 def analyze(src, profiles=None, lang="ru") -> Report:

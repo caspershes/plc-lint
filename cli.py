@@ -34,6 +34,7 @@ import webbrowser
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import engine  # noqa: E402
+import export_file  # noqa: E402
 import i18n  # noqa: E402
 
 VERSION = "1.0"
@@ -212,7 +213,8 @@ def print_report(report, path, lang, quiet=False):
     tone = "ok" if score >= 85 else ("medium" if score >= 60 else "high")
     line = (f"  {c(str(score) + '/100', tone)}   "
             f"{c(str(s['high']), 'high')} · {c(str(s['medium']), 'medium')} · {c(str(s['low']), 'low')}"
-            f"   {c('POU ' + str(report.pou_count), 'dim')}")
+            # у .export POU не читаются — показываем то, что реально разобрано
+            f"   {c(('POU ' + str(report.pou_count)) if report.pou_count else i18n.term(lang, 'scope.units', n=report.units), 'dim')}")
     print(line)
     print()
 
@@ -248,7 +250,8 @@ def expand(paths):
     out = []
     for p in paths:
         if os.path.isdir(p):
-            out.extend(sorted(glob.glob(os.path.join(p, "**", "*.xml"), recursive=True)))
+            for pat in ("*.xml", "*.export"):
+                out.extend(sorted(glob.glob(os.path.join(p, "**", pat), recursive=True)))
         elif any(ch in p for ch in "*?["):
             out.extend(sorted(glob.glob(p, recursive=True)))
         else:
@@ -263,9 +266,9 @@ def main(argv=None):
     dragged = sys.platform == "win32" and len(argv) == 1 and not argv[0].startswith("-")
 
     ap = argparse.ArgumentParser(
-        prog="plc-lint", description="Локальная проверка экспорта PLCopenXML. "
+        prog="plc-lint", description="Локальная проверка экспорта PLCopenXML или CODESYS .export. "
                                      "Файл никуда не отправляется — программа не выходит в сеть.")
-    ap.add_argument("files", nargs="*", help="файлы .xml, маски или каталоги")
+    ap.add_argument("files", nargs="*", help="файлы .xml/.export, маски или каталоги")
     ap.add_argument("--lang", choices=("ru", "en"), default=None, help="язык отчёта")
     ap.add_argument("--profile", action="append", choices=PROFILES, default=[],
                     help="дополнительный профиль правил (можно повторять)")
@@ -298,7 +301,12 @@ def main(argv=None):
         try:
             with open(path, "rb") as fh:
                 data = fh.read()
-            report = engine.analyze(data, profiles=args.profile, lang=lang)
+            # .export — другой формат (дерево устройств и экраны), и у него свои правила.
+            # Опознаём по содержимому, а не по расширению: экспорт сохраняют и как .xml.
+            if export_file.looks_like_export(data[:400]):
+                report = engine.analyze_export(path, lang=lang)
+            else:
+                report = engine.analyze(data, profiles=args.profile, lang=lang)
         except FileNotFoundError:
             print(f"не найден: {path}", file=sys.stderr)
             failed = True

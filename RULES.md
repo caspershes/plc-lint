@@ -1,11 +1,11 @@
 # PLC Lint — rule reference
 
-**37 checks.** Each entry says what it reads and how to fix it. Run them on your own export at [plc-linter.com](https://plc-linter.com) — or on the [example project](examples/).
+**42 checks.** Each entry says what it reads and how to fix it. Run them on your own export at [plc-linter.com](https://plc-linter.com) — or on the [example project](examples/).
 
 Severity: 🔴 high · 🟠 medium · ⚪ low.
 
 
-## 🔴 High (15)
+## 🔴 High (18)
 
 ### `always-false-condition` — Condition can never be true
 **Reads:** A condition that becomes identically false (or identically true) once same-scan assignments are substituted. The classic shape: one program derives a command from a sensor, another checks the alarm “command present but sensor absent” — substitution turns it into `NOT X AND X`, i.e. FALSE for any X. The alarm physically cannot fire: it is listed in the log, but there is no protection. The eye does not catch it because the assignment and the check live in different POUs, with the PLC_PRG call order between them. The rule substitutes only what is known for certain within the scan: the assignment must cover every execution path, and the source program must be called earlier. If a variable is assigned in several branches, every value is substituted and the rule fires only when the result is constant for all of them.
@@ -34,6 +34,20 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 **Fix:**
 - Wire a variable/setpoint into the divisor input instead of the literal 0 — usually a debug stub left behind.
 - If the divisor can go to zero at runtime — pick a safe value before DIV/MOD (a SEL on a compare-with-0).
+
+### `channel-output-off` — Module output left unconfigured
+**Reads:** A module output is bound to a variable, but no output signal type is selected. The program writes to the variable, the value reaches the channel and stops there: the DAC produces neither 4…20 mA nor 0…10 V. From the outside it looks like a faulty actuator — the valve does not move, the drive does not respond — while the program is correct.
+
+**Fix:**
+- Set the output signal type on the channel (4…20 mA or 0…10 V) to match what the actuator accepts.
+- If the output is unused, drop the variable binding so the project does not keep a command that goes nowhere.
+
+### `channel-sensor-off` — Sensor type cleared on a wired channel
+**Reads:** A module channel is wired to an IEC variable, but no sensor type is selected on it. The channel is not digitised: the variable stays at zero whatever the input. The trouble is that zero is plausible — for an outdoor sensor it reads as "0 °C outside", the weather-compensated curve immediately computes the wrong setpoint, and the commissioning engineer goes looking for the bug in the code. None of this is visible in ST, where the variable is declared and read as usual; the setting lives in the device parameters. A module usually has more free inputs than wired ones, and for those "off" is the correct setting, so the rule only looks at channels whose VALUE is bound to a variable (a status code is bound on free inputs too, and by that measure every input would look wired).
+
+**Fix:**
+- Select the sensor type for the channel in the device parameters — the one physically connected (Pt100, Pt1000, 4…20 mA).
+- If the input really is unused, remove the variable binding from the channel: "off" then becomes an honest setting and the rule goes quiet.
 
 ### `div-by-zero` — Division by a literal zero
 **Reads:** Division or MOD by a literal zero — a guaranteed runtime exception (division by zero) whenever this line is reached.
@@ -70,6 +84,13 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 **Fix:**
 - Assign each module a unique address (IP or Unit-ID) in the device configuration.
 - Cross-check the network address map — an address must be unique on one bus.
+
+### `module-disabled` — Module excluded from polling
+**Reads:** The module carries the "exclude from polling" flag. The controller does not poll it at all: inputs are not refreshed, outputs are not driven, and every linked variable keeps the value it had when polling stopped. The flag is usually set during commissioning to silence a missing-module error and then never cleared — a whole cabinet of signals is quietly dead while the program works with stale values and never complains.
+
+**Fix:**
+- Clear the "exclude from polling" flag if the cabinet is assembled and the module is in place.
+- If the module is physically absent, delete it from the device tree together with its bindings: a described but disabled module leaves variables in the program that nobody refreshes.
 
 ### `param-channel-mismatch` — Channel parameter fed from another channel
 **Reads:** In a function block call the parameter name refers to one channel while the value comes from another: `bPump2_Fault := gvl.alarm_nasos_CO1`. The rule fires only when channel numbering is proven within the same call — consistent pairs exist for at least two channels. The consequence is quiet and dangerous: a faulty pump is treated as healthy and picked for duty, the interlock never fires, and the log looks perfectly normal.
@@ -113,7 +134,7 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 - Replace the ELSIF chain with an array of curve points and interpolation.
 
 
-## 🟠 Medium (12)
+## 🟠 Medium (14)
 
 ### `case-without-else` — CASE without an ELSE branch (no default)
 **Reads:** CASE without an ELSE branch: if the selector takes a value not among the labels, nothing runs — a silent skip (a common state-machine bug).
@@ -190,6 +211,20 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 **Fix:**
 - Set a non-zero delay: `tmr(IN := cond, PT := T#5S);`
 - If no delay is needed — remove the timer and act on the condition directly.
+
+### `visu-index-mismatch` — Caption number differs from the index
+**Reads:** The number in an element's caption does not match the index in the bound variable: the caption says "Boiler 3" while the variable is `alarm_kotel[2]`. It is the same copy-paste trace, except here the error is visible right in the caption-to-binding pair. Format digits are stripped from the caption before comparing: on a live project `%2.0f Гц` next to `act_FH1` produced false positives — 2 and 0 are width and precision, not an equipment number.
+
+**Fix:**
+- Fix whichever is wrong — the index in the binding or the number in the caption. On site the operator trusts the caption.
+- If the caption number refers to something other than the array index (a position on the diagram, say), spell that out in the caption so the mismatch does not read as an error.
+
+### `visu-two-labels` — One variable under two captions
+**Reads:** The same variable is displayed on a screen next to different captions. This is almost always a copied element: "Pump 1" was drawn, duplicated next to it, the caption was fixed and the binding was not. The operator sees two instruments that in fact show one, and on site this surfaces exactly when a decision is made from the reading. Captions are compared by meaning: output formats (`%d`, `%.1f`) are stripped and extra whitespace is not treated as a difference.
+
+**Fix:**
+- Check the binding against the caption on both elements: the copied one usually kept its neighbour's variable.
+- For identical instruments a single visualisation template with a variable parameter is easier: there is nothing to copy and no binding to drift.
 
 ### `watchdog-disabled` — Task watchdog disabled
 **Reads:** A cyclic task has its watchdog disabled. If the scan overruns or hangs (e.g. a long cycle), the controller won't restart the task automatically — especially important for the main control task.
