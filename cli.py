@@ -304,7 +304,7 @@ def main(argv=None):
             # .export — другой формат (дерево устройств и экраны), и у него свои правила.
             # Опознаём по содержимому, а не по расширению: экспорт сохраняют и как .xml.
             if export_file.looks_like_export(data[:400]):
-                report = engine.analyze_export(path, lang=lang)
+                report = engine.analyze_export(path, profiles=args.profile, lang=lang)
             else:
                 report = engine.analyze(data, profiles=args.profile, lang=lang)
         except FileNotFoundError:

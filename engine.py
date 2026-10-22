@@ -2607,14 +2607,19 @@ def _title(rule: str) -> str:
     return RULES[rule][1]
 
 
-def analyze_export(src, lang="ru") -> Report:
-    """Разбор CODESYS ExportFile (.export): параметры модулей и экраны визуализации.
+def analyze_export(src, profiles=None, lang="ru") -> Report:
+    """Разбор CODESYS ExportFile (.export): все правила по программам ПЛЮС пять правил,
+    которых нет в PLCopenXML — по параметрам модулей и экранам визуализации.
 
-    Отдельная точка входа, а не ветка внутри analyze(): формат другой, и правил по нему
-    пока пять — те, что живут вне программ. Программы в экспорте тоже есть, но их разбор
-    (ST из экспорта → те же 37 правил) — отдельная работа, здесь она не делается, и отчёт
-    честно показывает ноль POU, а не делает вид, что код проверен."""
-    import export_file                      # локальный импорт: analyze() к формату не привязана
+    Программы в экспорте лежат построчно, а объявления отдельным разделом; мы собираем из
+    них дерево В ФОРМЕ PLCopenXML и отдаём обычному analyze(). Это осознанно дороже на одну
+    сериализацию, зато не появляется второй движок, который со временем разойдётся с первым:
+    правила, тексты и фикстуры остаются одни.
+
+    Чего на .export не будет: конфигурация задач в этом формате устроена иначе, поэтому
+    правила про сторожевой таймер и дубли Modbus-адресов молчат. Раздел устройств в отчёте
+    при этом заполняется — из дерева экспорта, а не из конфигурации PLCopenXML."""
+    import export_file
 
     def T(rule):
         return i18n.rule_title(lang, rule)
@@ -2622,32 +2627,33 @@ def analyze_export(src, lang="ru") -> Report:
     def D(key, **kw):
         return i18n.detail(lang, key, **kw)
 
-    name = "project"
-    if isinstance(src, str):
-        name = os.path.splitext(os.path.basename(src))[0]
+    name = os.path.splitext(os.path.basename(src))[0] if isinstance(src, str) else "project"
     ex = export_file.read(src)
+    rep = analyze(ET.tostring(export_file.to_plcopen(ex, name), encoding="utf-8"),
+                  profiles=profiles, lang=lang)
+    rep.name = name
 
-    findings = []
     rule_by_kind = {"sensor-off": "channel-sensor-off", "output-off": "channel-output-off",
                     "module-off": "module-disabled"}
     for dev, key, label, kind in heur_export_devices(ex):
         rule = rule_by_kind[kind]
-        findings.append(Finding(
+        rep.findings.append(Finding(
             rule=rule, severity=_sev(rule), title=T(rule), pou=dev, line=0,
             detail=D(rule, dev=dev, par=key, label=label or key)))
     for screen, var, kind, extra in heur_export_visu(ex):
         rule = "visu-two-labels" if kind == "two-labels" else "visu-index-mismatch"
-        findings.append(Finding(
+        rep.findings.append(Finding(
             rule=rule, severity=_sev(rule), title=T(rule), pou=screen, line=0,
             detail=D(rule, screen=screen, var=var, extra=extra)))
 
     order = {"high": 0, "medium": 1, "low": 2}
-    findings.sort(key=lambda f: (order.get(f.severity, 9), f.pou, f.rule))
-    return Report(name=name, version="", pou_count=0, globals_count=0, findings=findings,
-                  units=len(ex.devices) + len(ex.visus),
-                  device={"devices": [{"name": d.name, "params": len(d.params)} for d in ex.devices],
-                          "visus": [{"name": v.name, "elements": len(v.elements)} for v in ex.visus]},
-                  coverage={"total": 0, "st": 0, "by_lang": {}, "nonst_count": 0})
+    rep.findings.sort(key=lambda f: (order.get(f.severity, 9), f.pou, f.line or 0, f.rule))
+    # модули и экраны — то, чего в PLCopenXML нет; размер проекта по-прежнему в POU,
+    # а units нужен, когда программ в экспорте не оказалось вовсе
+    rep.device = {"devices": [{"name": d.name, "params": len(d.params)} for d in ex.devices],
+                  "visus": [{"name": v.name, "elements": len(v.elements)} for v in ex.visus]}
+    rep.units = len(ex.devices) + len(ex.visus)
+    return rep
 
 
 def analyze(src, profiles=None, lang="ru") -> Report:

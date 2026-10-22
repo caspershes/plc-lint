@@ -129,7 +129,7 @@ STRINGS = {
                       "Один .exe, без установки и без Python: перетащите на него экспорт — "
                       "рядом появится тот же отчёт."),
     "index.local_btn": "Скачать для Windows",
-    "index.local_note": "Читает и выгрузку CODESYS <code>.export</code> — это ещё <strong>пять проверок</strong> дерева устройств и экранов, которых нет в веб-версии: снятый тип датчика на занятом канале, ненастроенный выход, модуль вне опроса. Linux/macOS: <code>python cli.py project.xml</code> · исходники на GitHub",
+    "index.local_note": "Читает и выгрузку CODESYS <code>.export</code>: там работают все правила по программам <strong>плюс пять</strong>, которых нет в веб-версии — снятый тип датчика на занятом канале, ненастроенный выход, модуль вне опроса и две находки по экранам. Linux/macOS: <code>python cli.py project.xml</code> · исходники на GitHub",
     "index.path_upload": "Проверить прямо здесь",
     "index.learn_link": "Разборы отдельных ошибок →",
     "learn.title": "Ошибки, которые компилятор пропускает — PLC Lint",
@@ -744,7 +744,7 @@ STRINGS = {
                       "— no install, no Python, <strong>no network calls at all</strong>. Drop an "
                       "export onto it and the same report appears next to the file."),
     "index.local_btn": "Download for Windows",
-    "index.local_note": "It also reads a CODESYS <code>.export</code> — that is <strong>five more checks</strong> of the device tree and the screens, which the hosted version does not have: a sensor type cleared on a wired channel, an unconfigured output, a module excluded from polling. Linux/macOS: <code>python cli.py project.xml</code> · MIT on GitHub",
+    "index.local_note": "It also reads a CODESYS <code>.export</code>: every program rule works there, <strong>plus five</strong> the hosted version does not have — a sensor type cleared on a wired channel, an unconfigured output, a module excluded from polling, and two screen findings. Linux/macOS: <code>python cli.py project.xml</code> · MIT on GitHub",
     "index.path_upload": "Check it here",
     "index.learn_link": "Bugs explained one by one →",
     "learn.title": "PLC bugs the compiler accepts — PLC Lint",

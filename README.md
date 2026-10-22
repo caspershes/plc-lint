@@ -31,8 +31,9 @@ IEC 61131-3 format):
   the 500+ environments built on the CODESYS 3.5 runtime
 
 And, locally, a **CODESYS ExportFile** (`.export`, `Project → Export`). That format carries
-what PLCopenXML leaves out — the device tree and the visualisation — so it unlocks five
-checks that no analyser does, because every analyser reads ST:
+what PLCopenXML leaves out — the device tree and the visualisation — on top of the programs
+themselves. So **every program rule works there too**, plus five checks that no analyser
+does, because every analyser reads ST:
 
 | Finding | What it means on site |
 |---|---|
@@ -42,8 +43,15 @@ checks that no analyser does, because every analyser reads ST:
 | one variable under two captions | a copied element kept its neighbour's binding: "pump 2" shows pump 1 |
 | caption number ≠ variable index | "Boiler 3" next to `alarm_kotel[2]` |
 
-The format is detected by content, not by extension, and parsing is streaming: a 29 MB
-export costs 47 MB of memory instead of the 204 MB a full tree would take.
+In an export a POU body is stored line by line and the declarations sit in a separate
+section, so the parser rebuilds them into a PLCopenXML-shaped tree and hands that to the
+usual analyser — one rule set, one set of texts, no second engine to drift apart. The
+format is detected by content, not by extension, and parsing is streaming: a 29 MB export
+costs 47 MB of memory instead of the 204 MB a full tree would take, and a live project
+comes out as 25 POUs and 205 globals in about two seconds.
+
+What an export does **not** give: the task configuration is laid out differently there, so
+the watchdog and duplicate-Modbus-address rules stay quiet on `.export` rather than guess.
 
 ## What it catches
 
@@ -80,7 +88,7 @@ Windows has not seen this binary before and it is not code-signed, so SmartScree
 
 ```
 python cli.py project.xml                # report in the console + HTML next to the file
-python cli.py project.export             # device parameters and visualisation bindings
+python cli.py project.export             # programs + device parameters + screen bindings
 python cli.py exports/ --no-html         # a whole folder at once
 python cli.py p.xml --json > report.json # machine-readable, for a build pipeline
 python cli.py p.xml --fail-on high       # exit code 1 if there are high-severity findings
@@ -90,9 +98,9 @@ python cli.py p.xml --profile heating    # optional rule profiles: heating, plco
 The report is identical to the hosted one — same 42 rules, same engine file. What the
 hosted version adds: sharing a link, history across builds, diffs between two exports,
 the acceptance protocol and the signed certificate. What only the local version does:
-`.export`, with the five device-and-visualisation checks above — a 30 MB export does not
-belong in a browser upload, and that file is the one you are least likely to be allowed
-to send anywhere.
+`.export` — the same rules plus the five device-and-visualisation checks above. A 30 MB
+export does not belong in a browser upload, and that file is the one you are least likely
+to be allowed to send anywhere.
 
 ### In CI
 
