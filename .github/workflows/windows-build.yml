@@ -64,6 +64,17 @@ jobs:
           & $exe $fx --no-color | Out-Null
           if (-not (Test-Path ($fx -replace '\.xml$', '-report.html'))) { throw "HTML не создан" }
 
+          # CODESYS .export: формат опознаётся по содержимому, и в сборке должен лежать
+          # export_file.py. Без этой проверки отсутствие модуля в .exe вылезло бы у
+          # инженера на его файле, а не в CI.
+          $ex = @("examples\export_bugs.export", "tests\fixtures\export_bugs.export") |
+                Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $ex) { throw "не найдена фикстура .export" }
+          & $exe $ex --no-html --no-color --json > exp.json
+          $e = Get-Content exp.json -Raw | ConvertFrom-Json
+          if ($e[0].summary.high -lt 1) { throw ".export разобран без находок — модуля нет в сборке" }
+          Write-Host ".export: high=$($e[0].summary.high) medium=$($e[0].summary.medium)"
+
       - uses: actions/upload-artifact@v4
         with:
           name: plc-lint-windows
@@ -78,5 +89,15 @@ jobs:
             Локальная версия PLC Lint для Windows — один файл, без установки и без Python.
 
             Проверка идёт на вашем компьютере: программа не выходит в сеть, экспорт
-            никуда не отправляется. Перетащите .xml на plc-lint.exe — рядом появится
-            HTML-отчёт и откроется в браузере.
+            никуда не отправляется. Перетащите на plc-lint.exe файл .xml (PLCopenXML)
+            или .export (выгрузка проекта CODESYS) — рядом появится HTML-отчёт и
+            откроется в браузере.
+
+            Что даёт .export: в нём есть дерево устройств и визуализация, которых нет
+            в PLCopenXML, и пять проверок, которых нет больше нигде — снятый тип датчика
+            на занятом канале, ненастроенный выход, модуль, исключённый из опроса, и
+            две находки по экранам (одна переменная под двумя подписями, номер в подписи
+            не равен индексу).
+
+            Файл не подписан сертификатом: при первом запуске Windows покажет
+            «неизвестный издатель» → «Подробнее» → «Выполнить в любом случае».

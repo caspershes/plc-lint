@@ -11,7 +11,8 @@ catch it — the syntax is valid. PLC Lint does.
 
 > **Run it locally — nothing leaves your machine.** Windows: grab
 > [`plc-lint.exe`](https://github.com/caspershes/plc-lint/releases/latest) and drop your
-> export onto it. Anywhere else: `python cli.py project.xml`. No install, no dependencies,
+> `.xml` or `.export` onto it. Anywhere else: `python cli.py project.xml`. No install, no
+> dependencies,
 > **no network calls at all** — that last part is enforced by a test, not by a promise
 > ([`tests/cli_local.py`](tests/cli_local.py) runs the whole analysis with `socket` replaced
 > by one that raises). The hosted version at [plc-linter.com](https://plc-linter.com) is the
@@ -28,6 +29,21 @@ IEC 61131-3 format):
 - **TwinCAT3** (Beckhoff — same engine, same namespace)
 - **WAGO e!COCKPIT, Schneider EcoStruxure Machine Expert, OWEN, Weintek** and
   the 500+ environments built on the CODESYS 3.5 runtime
+
+And, locally, a **CODESYS ExportFile** (`.export`, `Project → Export`). That format carries
+what PLCopenXML leaves out — the device tree and the visualisation — so it unlocks five
+checks that no analyser does, because every analyser reads ST:
+
+| Finding | What it means on site |
+|---|---|
+| sensor type cleared on a wired channel | the channel is not digitised and the variable stays at zero — and for an outdoor sensor zero reads as a plausible 0 °C |
+| output bound, signal type not selected | the command goes nowhere, the actuator does not move |
+| module excluded from polling | a whole cabinet of signals is dead while the program keeps stale values |
+| one variable under two captions | a copied element kept its neighbour's binding: "pump 2" shows pump 1 |
+| caption number ≠ variable index | "Boiler 3" next to `alarm_kotel[2]` |
+
+The format is detected by content, not by extension, and parsing is streaming: a 29 MB
+export costs 47 MB of memory instead of the 204 MB a full tree would take.
 
 ## What it catches
 
@@ -55,13 +71,16 @@ Your customer's export is their intellectual property, and sending it to somebod
 server is rarely your call — it's company policy or a clause in the NDA. So don't.
 
 **Windows, no Python:** download `plc-lint.exe` from
-[Releases](https://github.com/caspershes/plc-lint/releases/latest), drag your `.xml` onto it.
-An HTML report appears next to the file and opens in your browser.
+[Releases](https://github.com/caspershes/plc-lint/releases/latest), drag your `.xml` or
+`.export` onto it. An HTML report appears next to the file and opens in your browser.
+Windows has not seen this binary before and it is not code-signed, so SmartScreen will say
+"unknown publisher" — "More info" → "Run anyway", or run it from a terminal.
 
 **Anywhere with Python 3.9+:** no dependencies, the engine is standard library only.
 
 ```
 python cli.py project.xml                # report in the console + HTML next to the file
+python cli.py project.export             # device parameters and visualisation bindings
 python cli.py exports/ --no-html         # a whole folder at once
 python cli.py p.xml --json > report.json # machine-readable, for a build pipeline
 python cli.py p.xml --fail-on high       # exit code 1 if there are high-severity findings
@@ -70,7 +89,10 @@ python cli.py p.xml --profile heating    # optional rule profiles: heating, plco
 
 The report is identical to the hosted one — same 42 rules, same engine file. What the
 hosted version adds: sharing a link, history across builds, diffs between two exports,
-the acceptance protocol and the signed certificate.
+the acceptance protocol and the signed certificate. What only the local version does:
+`.export`, with the five device-and-visualisation checks above — a 30 MB export does not
+belong in a browser upload, and that file is the one you are least likely to be allowed
+to send anywhere.
 
 ### In CI
 
