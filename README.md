@@ -50,6 +50,13 @@ format is detected by content, not by extension, and parsing is streaming: a 29 
 costs 47 MB of memory instead of the 204 MB a full tree would take, and a live project
 comes out as 25 POUs and 205 globals in about two seconds.
 
+An export also shows what the programs do **not** say. Screen bindings and unit-conversion
+objects count as uses, so a setpoint that lives only on a screen is no longer reported as
+dead — on a live project the whole weather curve is built from unit conversions and never
+appears in ST. The same data turns "nothing writes this alarm" from a guess into a fact,
+which is why that finding is raised to critical on `.export` and stays a warning on
+PLCopenXML.
+
 What an export does **not** give: the task configuration is laid out differently there, so
 the watchdog and duplicate-Modbus-address rules stay quiet on `.export` rather than guess.
 
@@ -69,7 +76,7 @@ Real findings from 8 real boiler-house projects (CODESYS 3.5 SP17, scores 62–8
 Plus hygiene: magic numbers, dead POUs, bloated routines, missing comments,
 naming-standard profiles, device/IO-mapping summary.
 
-**All 42 rules, with what each one reads and how to fix it: [RULES.md](RULES.md).**
+**All 43 rules, with what each one reads and how to fix it: [RULES.md](RULES.md).**
 A known-bad project you can upload yourself, with every expected finding listed:
 [examples/](examples/).
 
@@ -95,7 +102,7 @@ python cli.py p.xml --fail-on high       # exit code 1 if there are high-severit
 python cli.py p.xml --profile heating    # optional rule profiles: heating, plcopen-naming
 ```
 
-The report is identical to the hosted one — same 42 rules, same engine file. What the
+The report is identical to the hosted one — same 43 rules, same engine file. What the
 hosted version adds: sharing a link, history across builds, diffs between two exports,
 the acceptance protocol and the signed certificate. What only the local version does:
 `.export` — the same rules plus the five device-and-visualisation checks above. A 30 MB
@@ -147,7 +154,7 @@ Without GitHub, the exit code does the same job anywhere:
 
 | | |
 |---|---|
-| `engine.py` | the analyzer: parser + all 42 rules |
+| `engine.py` | the analyzer: parser + all 43 rules |
 | `i18n.py` | rule titles, explanations and fixes (EN/RU) |
 | `cli.py` | local runner: console + HTML + JSON |
 | `action.yml` | GitHub Action: the same analysis inside a CI pipeline |

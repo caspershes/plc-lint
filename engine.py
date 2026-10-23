@@ -551,8 +551,10 @@ def task_pou_instances(root):
     return names
 
 
-def dead_pous(root, pous):
-    bodies = "\n".join(d.get("fulltext", d["body"]) for d in pous.values())
+def dead_pous(root, pous, extra=""):
+    """extra — имена ВНЕ программ (привязки экранов, параметры преобразований): кнопка
+    на экране умеет вызывать программу, и без этого она числилась бы мёртвой."""
+    bodies = "\n".join(d.get("fulltext", d["body"]) for d in pous.values()) + "\n" + (extra or "")
     decls = []
     for pou in root.iter(q("pou")):
         for v in pou.iter(q("variable")):
@@ -774,7 +776,7 @@ def _families(text):
     return fam
 
 
-def heur_family_gap(pous, root):
+def heur_family_gap(pous, root, extra=""):
     """Поле есть у всех каналов семейства, кроме ровно одного, — и там оно объявлено.
 
     Опора на объявления обязательна: разный состав полей у каналов — норма (разное
@@ -782,7 +784,10 @@ def heur_family_gap(pous, root):
     у всех кроме одного» — уже сильный сигнал, что блок скопировали и не дописали.
     """
     per_pou = {}          # (base, idx, suf) → POU, где поле реально используется
-    all_text = []
+    # extra — использования вне программ. На боевом проекте без этого правило дало ложное
+    # «у канала 2 поле не заполняется»: весь погодный график собран объектами
+    # «Преобразование единиц», и в ST его уставок нет ни одной строкой.
+    all_text = [extra or ""]
     for name, d in pous.items():
         text = strip_comments(d.get("fulltext") or d["body"])
         all_text.append(text)
@@ -1599,7 +1604,7 @@ def _sws_base(name):
     return st_key(re.sub(r"\[[^\]]*\]", "", name or "")).split(".")[0]
 
 
-def heur_signal_without_source(pous, decl, root):
+def heur_signal_without_source(pous, decl, root, screen_reads=(), screen_writes=()):
     """Авария читается в условии, но её никто не формирует: защита мёртвая.
 
     Боевой случай: `alarm_kotel[1..3]` и `alarm_peregrev_kotel[1..3]` читаются в трёх местах
@@ -1627,6 +1632,15 @@ def heur_signal_without_source(pous, decl, root):
         # читаем ПОСЛЕ снятия левых частей: `x := 0` не делает x прочитанным
         for m in _SWS_IDENT.finditer(_SWS_WRITE.sub(" ", src)):
             read_in.setdefault(_sws_base(m.group(1)), set()).add(name)
+    # Экран — полноправный источник: поле ввода уставки и кнопка ПИШУТ переменную.
+    # В PLCopenXML этого не видно (отсюда осторожный список исключений по именам),
+    # а в .export видно, и тогда «никто не формирует» — факт.
+    written |= {_sws_base(n) for n in screen_writes}
+    for n in screen_reads:
+        read_in.setdefault(_sws_base(n), set()).add("visu")
+    # Привязки экранов нам отдали → вывод подтверждён, а не выведен из имени.
+    # Это и есть разница между осторожным medium на PLCopenXML и high на .export.
+    confirmed = bool(screen_reads or screen_writes)
 
     hits = []
     for var in sorted(decl):
@@ -1637,7 +1651,7 @@ def heur_signal_without_source(pous, decl, root):
             continue
         if not _SWS_STATE.search(k) or _SWS_SCREEN.search(k):
             continue
-        hits.append((var, sorted(read_in[k])))
+        hits.append((var, sorted(read_in[k]), confirmed))
     return hits
 
 
@@ -1725,6 +1739,45 @@ def heur_export_visu(export):
                  for var in sorted(two)]
         # у скопированного элемента оба признака сразу; один дефект — одна находка
         hits += [h for h in idx if h[1] not in two]
+    return hits
+
+
+# ---------- сравнение беззнакового с нулём ----------
+# Классика, которую компилятор пропускает: `IF cnt < 0 THEN` при `cnt : UINT`. Ветвь
+# мертва, и обычно это не стиль, а след неверно выбранного типа: защиту от отрицательного
+# значения написали, а тип её отменил. Нашлось на боевом проекте (`AO_temp_kotel : UINT`,
+# зажим `IF AO_temp_kotel < 0 THEN AO_temp_kotel := 0`).
+_UNSIGNED_T = re.compile(r"^(?:USINT|UINT|UDINT|ULINT|BYTE|WORD|DWORD|LWORD)$", re.I)
+# `<` (но не `<>`) и `>=` слева, `>` и `<=` справа — только эти четыре формы тождественны
+_UZ_LEFT = re.compile(r"\b(?:gvl\.)?([A-Za-z_]\w*)\s*(<(?!>)|>=)\s*0(?![.\d])")
+_UZ_RIGHT = re.compile(r"(?<![\w.])0\s*(>|<=)\s*(?:gvl\.)?([A-Za-z_]\w*)\b")
+
+
+def heur_unsigned_vs_zero(pous, decl):
+    """[(pou, line, var, type, always_true, code)] — сравнение беззнакового с нулём."""
+    gl = {k: v for k, v in decl.items() if _UNSIGNED_T.match((v or "").strip())}
+    hits = []
+    for name, d in pous.items():
+        types = dict(gl)
+        for tag in ("localVars", "inputVars", "outputVars", "inOutVars", "tempVars"):
+            for var, typ in _iface_names(d.get("iface"), tag).items():
+                if _UNSIGNED_T.match((typ or "").strip()):
+                    types[var.lower()] = typ
+                else:
+                    types.pop(var.lower(), None)   # локал перекрывает глобал того же имени
+        if not types:
+            continue
+        for i, line in enumerate(blank_comments(d["body"]).splitlines(), 1):
+            for m in _UZ_LEFT.finditer(line):
+                var, op = m.group(1), m.group(2)
+                if var.lower() in types:
+                    hits.append((name, i, var, types[var.lower()], op == ">=",
+                                 line.strip()[:110]))
+            for m in _UZ_RIGHT.finditer(line):
+                op, var = m.group(1), m.group(2)
+                if var.lower() in types:
+                    hits.append((name, i, var, types[var.lower()], op == "<=",
+                                 line.strip()[:110]))
     return hits
 
 
@@ -2565,6 +2618,7 @@ RULES = {
     "timer-reset-by-own-condition": ("high", "Таймер гасит собственное условие отсчёта"),
     "always-false-condition": ("high", "Условие не выполнится ни при каких значениях"),
     "signal-without-source": ("medium", "Аварию никто не формирует"),
+    "unsigned-vs-zero": ("medium", "Беззнаковое сравнивается с нулём"),
     # только для CODESYS ExportFile (.export): в PLCopenXML параметров модулей и
     # привязок визуализации нет вовсе
     "channel-sensor-off": ("high", "У занятого канала снят тип датчика"),
@@ -2629,8 +2683,10 @@ def analyze_export(src, profiles=None, lang="ru") -> Report:
 
     name = os.path.splitext(os.path.basename(src))[0] if isinstance(src, str) else "project"
     ex = export_file.read(src)
+    reads, writes = ex.refs()
     rep = analyze(ET.tostring(export_file.to_plcopen(ex, name), encoding="utf-8"),
-                  profiles=profiles, lang=lang)
+                  profiles=profiles, lang=lang,
+                  extra_refs={"text": ex.ref_text(), "reads": reads, "writes": writes})
     rep.name = name
 
     rule_by_kind = {"sensor-off": "channel-sensor-off", "output-off": "channel-output-off",
@@ -2656,10 +2712,19 @@ def analyze_export(src, profiles=None, lang="ru") -> Report:
     return rep
 
 
-def analyze(src, profiles=None, lang="ru") -> Report:
+def analyze(src, profiles=None, lang="ru", extra_refs=None) -> Report:
     """src: путь (str), bytes или file-like. profiles — набор опциональных стандарт-профилей
     (напр. {'plcopen-naming'}). lang — язык заголовков/деталей находок (ru/en).
+
+    extra_refs — использования ВНЕ программ: {"text", "reads", "writes"}. В PLCopenXML их
+    нет и быть не может, а из .export они приходят (привязки экранов, параметры
+    преобразований единиц). Без них правила «не используется / никто не формирует»
+    считают мёртвым то, что живёт на экране.
     Возвращает Report со структурированными findings."""
+    extra_refs = extra_refs or {}
+    _xtext = extra_refs.get("text", "")
+    _xreads = extra_refs.get("reads", ())
+    _xwrites = extra_refs.get("writes", ())
     profiles = set(profiles or ())
 
     def T(rule):                      # локализованный заголовок правила
@@ -2764,7 +2829,7 @@ def analyze(src, profiles=None, lang="ru") -> Report:
             pou=nm, line=i, detail=D("timer-zero-pt"), code=ln))
 
     # channel-mismatch — три признака одного класса: копия соседнего канала
-    for nm, base, miss, suf, have in heur_family_gap(pous, root):
+    for nm, base, miss, suf, have in heur_family_gap(pous, root, extra=_xtext):
         findings.append(Finding(
             rule="family-gap", severity=_sev("family-gap"), title=T("family-gap"),
             pou=nm, detail=D("family-gap", field=f"{base}_{miss}_{suf}", ch=miss,
@@ -2802,12 +2867,22 @@ def analyze(src, profiles=None, lang="ru") -> Report:
                      val=i18n.term(lang, "af.false" if val is False else "af.true"),
                      steps=steps)))
 
-    for var, readers in heur_signal_without_source(pous, decl, root):
+    for var, readers, confirmed in heur_signal_without_source(pous, decl, root,
+                                                               _xreads, _xwrites):
         findings.append(Finding(
-            rule="signal-without-source", severity=_sev("signal-without-source"),
+            rule="signal-without-source",
+            # на .export привязки экранов видны: «не пишется нигде» — факт, а не догадка
+            severity="high" if confirmed else _sev("signal-without-source"),
             title=T("signal-without-source"), pou=readers[0], line=0,
-            detail=D("signal-without-source", var=var, n=len(readers),
-                     readers=M(readers, 3))))
+            detail=D("signal-without-source.confirmed" if confirmed else "signal-without-source",
+                     var=var, n=len(readers), readers=M(readers, 3))))
+
+    for nm, i, var, typ, always, ln in heur_unsigned_vs_zero(pous, decl):
+        findings.append(Finding(
+            rule="unsigned-vs-zero", severity=_sev("unsigned-vs-zero"),
+            title=T("unsigned-vs-zero"), pou=nm, line=i, code=ln,
+            detail=D("unsigned-vs-zero", var=var, type=typ,
+                     val=i18n.term(lang, "af.true" if always else "af.false"))))
 
     for nm, i, p1, p2, v1, v2, eq, total, ln in heur_index_mismatch(pous):
         findings.append(Finding(
@@ -2846,7 +2921,7 @@ def analyze(src, profiles=None, lang="ru") -> Report:
                 rule=rule, severity=_sev(rule), title=T(rule),
                 pou=nm, line=i, detail=T(rule), code=ln))
 
-    for nm in dead_pous(root, pous):
+    for nm in dead_pous(root, pous, extra=_xtext):
         findings.append(Finding(
             rule="dead-pou", severity=_sev("dead-pou"), title=T("dead-pou"),
             pou=nm, detail=D("dead-pou", nm=nm)))

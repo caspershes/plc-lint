@@ -1,6 +1,6 @@
 # PLC Lint — rule reference
 
-**42 checks.** Each entry says what it reads and how to fix it. Run them on your own export at [plc-linter.com](https://plc-linter.com) — or on the [example project](examples/).
+**43 checks.** Each entry says what it reads and how to fix it. Run them on your own export at [plc-linter.com](https://plc-linter.com) — or on the [example project](examples/).
 
 Severity: 🔴 high · 🟠 medium · ⚪ low.
 
@@ -134,7 +134,7 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 - Replace the ELSIF chain with an array of curve points and interpolation.
 
 
-## 🟠 Medium (14)
+## 🟠 Medium (15)
 
 ### `case-without-else` — CASE without an ELSE branch (no default)
 **Reads:** CASE without an ELSE branch: if the selector takes a value not among the labels, nothing runs — a silent skip (a common state-machine bug).
@@ -211,6 +211,14 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 **Fix:**
 - Set a non-zero delay: `tmr(IN := cond, PT := T#5S);`
 - If no delay is needed — remove the timer and act on the condition directly.
+
+### `unsigned-vs-zero` — Unsigned compared against zero
+**Reads:** An unsigned variable (UINT, UDINT, WORD, BYTE and the like) is compared against zero in a way whose answer is known in advance: `x < 0` is never true, `x >= 0` is never false. The compiler does not complain, the branch compiles and never runs. Usually this is not a style issue but the trace of a wrongly chosen type: the guard against a negative value was written deliberately and the type silently cancelled it — and where a clamp to zero was expected, the value wraps around instead (0 − 1 on a UINT gives 65535). The `x >= 0` form is particularly nasty inside an alarm condition: it always holds, so the alarm either stays on permanently or masks the real one.
+
+**Fix:**
+- If a negative value is possible, switch the type to a signed one (INT/DINT/REAL) — the guard will then do what it was meant to do.
+- If a negative value is impossible, drop the dead branch: it gives a false sense of protection to whoever reads the code after you.
+- Check the arithmetic above it: on an unsigned type `0 - 1` yields the top of the range, which is exactly what a clamp to zero fails to catch.
 
 ### `visu-index-mismatch` — Caption number differs from the index
 **Reads:** The number in an element's caption does not match the index in the bound variable: the caption says "Boiler 3" while the variable is `alarm_kotel[2]`. It is the same copy-paste trace, except here the error is visible right in the caption-to-binding pair. Format digits are stripped from the caption before comparing: on a live project `%2.0f Гц` next to `act_FH1` produced false positives — 2 and 0 are width and precision, not an equipment number.

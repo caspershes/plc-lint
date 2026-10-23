@@ -40,7 +40,18 @@ P_VAR_OUTPUT = 2477733581   # переменная вывода значения
 P_VAR_TEXT = 4168582468     # переменная, подставляемая в текст
 P_TAP_VAR = 1999528970      # переменная нажатия (toggle/tap)
 P_ACTION_VAR = 1647042231   # действие кнопки
+P_CHECKBOX_VAR = 743958181  # переменная флажка — у него свой Id
 P_VAR_ORDER = (P_VAR_OUTPUT, P_VAR_TEXT, P_TAP_VAR, P_ACTION_VAR)
+# Экран не только показывает, но и ПИШЕТ: поле ввода уставки, флажок, кнопка-переключатель.
+# Это ответ на главную граблю правила «сигнал без источника»: в PLCopenXML привязок не
+# видно, и «не пишется в ST» там остаётся догадкой, а здесь становится фактом.
+# Проверено на боевом проекте: все 9 уставок погодного графика, которых нет ни в одной
+# строке ST, пишутся именно с экранов, а аварии котлов не пишутся нигде.
+P_WRITE_IDS = (P_VAR_TEXT, P_TAP_VAR, P_ACTION_VAR, P_CHECKBOX_VAR)
+# параметры объекта «Преобразование единиц»: отрезок графика читает уставки прямо отсюда,
+# и в ST этих имён нет вовсе (в боевом проекте так собран весь погодный график)
+_CONV_FIELDS = ("BaseStart", "BaseEnd", "TargetStart", "TargetEnd")
+_REF_RE = re.compile(r"\b(?:[A-Za-z_]\w*\.)?([A-Za-z_]\w*)\b")
 
 
 class Device:
@@ -123,10 +134,36 @@ class Code:
 
 
 class Export:
-    def __init__(self, devices, visus, code=()):
+    def __init__(self, devices, visus, code=(), conversions=()):
         self.devices = devices
         self.visus = visus
         self.code = list(code)
+        self.conversions = list(conversions)   # [(имя, [ссылки на переменные])]
+
+    def refs(self):
+        """({читается}, {пишется}) — имена переменных ВНЕ программ: привязки экранов и
+        параметры преобразований. Для правил это такие же использования, как строки ST:
+        без них уставки, которые крутят только с экрана, выглядят мёртвыми."""
+        reads, writes = set(), set()
+        for v in self.visus:
+            for props in v.elements:
+                for pid, val in props.items():
+                    val = (val or "").strip()
+                    if not val or val.startswith("<"):
+                        continue          # «<toggle/tap variable>» — заглушка, не привязка
+                    target = writes if pid in P_WRITE_IDS else reads
+                    for m in _REF_RE.finditer(val):
+                        target.add(m.group(1).lower())
+        for _name, refs in self.conversions:
+            for r in refs:
+                for m in _REF_RE.finditer(r):
+                    reads.add(m.group(1).lower())
+        return reads, writes
+
+    def ref_text(self):
+        """Те же имена одной строкой — для правил, которые ищут «встречается ли имя»."""
+        reads, writes = self.refs()
+        return " ".join(sorted(reads | writes))
 
 
 def _txt(el):
@@ -227,6 +264,25 @@ def _visu(name, obj):
     return Visu(name, elems)
 
 
+def _conversions(obj):
+    """Преобразования единиц объекта: [(имя, [ссылки])]. Отрезок погодного графика —
+    это именно такой объект, и уставки он читает из своих параметров, а не из кода."""
+    out, cur, refs = [], None, []
+    for el in obj.iter():
+        nm = el.get("Name")
+        if nm == "ConversionName":
+            if cur:
+                out.append((cur, refs))
+            cur, refs = (el.text or "").strip(), []
+        elif nm in _CONV_FIELDS and cur:
+            val = (el.text or "").strip()
+            if val and not val.replace(".", "", 1).replace("-", "", 1).isdigit():
+                refs.append(val)
+    if cur:
+        out.append((cur, refs))
+    return out
+
+
 def _text_sections(obj):
     """Разделы текста объекта в порядке документа: тело и объявления."""
     out = []
@@ -247,7 +303,7 @@ def read(src):
     if isinstance(src, (bytes, bytearray)):
         import io
         src = io.BytesIO(bytes(src))
-    devices, visus, code = [], [], []
+    devices, visus, code, convs = [], [], [], []
     meta_name, meta_type, meta_guid, meta_parent = None, None, None, None
     for _ev, el in ET.iterparse(src, events=("end",)):
         if el.tag != "Single":
@@ -268,13 +324,16 @@ def read(src):
         else:
             if typ == VISU_TYPE:
                 visus.append(_visu(meta_name, el))
+            conv = _conversions(el)
+            if conv:
+                convs += conv
             # текст есть и у шаблонов визуализации (объявления интерфейса) — собираем всё,
             # чтобы ничего не терялось молча; что считать POU, решает to_plcopen()
             sections = _text_sections(el)
             if sections:
                 code.append(Code(meta_name, meta_guid, meta_parent, sections))
         el.clear()                            # поддерево больше не нужно
-    return Export(devices, visus, code)
+    return Export(devices, visus, code, convs)
 
 
 def looks_like_export(head):
