@@ -1341,7 +1341,31 @@ def bool_const(f):
 _TR_CALL = re.compile(r"\b([A-Za-z_]\w*)\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)", re.S)
 _TR_IN = re.compile(r"\bIN\s*:=\s*([^,)]+)", re.I | re.S)
 _TR_SIMPLE = re.compile(r"^[A-Za-z_][\w.]*(?:\[[^\]]*\])?$")
-_TR_TIMERS = ("TON", "TOF", "TP", "TONOF", "BLINK")
+_TR_KNOWN = ("TON", "TOF", "TP", "TONOF", "BLINK")
+
+
+def _tr_polarity(kind):
+    """Что именно ломает отсчёт у таймера этого типа.
+
+    Дефект один и тот же — отсчёт разрушает код, который сам же таймер и открывает, —
+    но «неправильная запись» у разных таймеров разная. TON отсчитывает, пока вход
+    держится TRUE, значит губит его гашение. TOF отсчитывает задержку выключения,
+    пока вход держится FALSE, значит губит его повторное взведение: выдержка не
+    истекает никогда, и оборудование не выключается.
+
+    TP и BLINK не подходят ни подо что: у TP вход работает как фронт, импульс идёт
+    независимо от входа, а BLINK — мигалка без выдержки. На них правило молчит.
+
+    Неизвестный тип (своя обёртка над таймером, видим только `.Q`) считаем задержкой
+    включения: так правило вело себя до разделения полярностей, и на корпусе это
+    давало ноль ложных."""
+    if kind == "TOF":
+        return ("off",)
+    if kind == "TONOF":
+        return ("on", "off")
+    if kind in ("TP", "BLINK"):
+        return ()
+    return ("on",)
 
 
 def _tr_in_var(text):
@@ -1356,12 +1380,14 @@ def _tr_in_var(text):
     return None
 
 
-def _tr_resets(items, var, start=0):
-    """Гасится ли var В НОЛЬ на ВСЕХ путях среди items[start:]? → строка или None.
+def _tr_forced(items, var, want, start=0):
+    """Приходит ли var к want на ВСЕХ путях среди items[start:]? → строка или None.
 
-    Сброс — именно погашение. Любое другое присваивание (`V := alarm OR cx`) не сброс,
-    а пересчёт входа из других сигналов: с таким послаблением правило дало 9 ложных
-    из 9 на боевом 1_4pump, где четыре каскада пересчитывают stop_pause_N после вызова."""
+    `want=False` — гашение входа (губит TON), `want=True` — повторное взведение
+    (губит TOF). В обе стороны требование одинаковое: значение должно быть именно
+    константой. Любое другое присваивание (`V := alarm OR cx`) — не сброс, а пересчёт
+    входа из других сигналов: с таким послаблением правило дало 9 ложных из 9 на
+    боевом 1_4pump, где четыре каскада пересчитывают stop_pause_N после вызова."""
     k = st_key(var)
     for it in items[start:]:
         if it["kind"] == "stmt":
@@ -1372,14 +1398,14 @@ def _tr_resets(items, var, start=0):
             if f is None:
                 continue
             val = bool_const(f)
-            if val is False:
+            if val is want:
                 return it["line"]
-            if val is True:
-                return None          # взвели заново — это не сброс
+            if val is (not want):
+                return None          # увели в другую сторону — дефекта нет
         elif it["kind"] == "if" and it["has_else"]:
-            lines = [_tr_resets(b["items"], var) for b in it["branches"]]
+            lines = [_tr_forced(b["items"], var, want) for b in it["branches"]]
             if all(lines):
-                return min(lines)    # погасили в каждой ветви — путь не обойти
+                return min(lines)    # переписали в каждой ветви — путь не обойти
     return None
 
 
@@ -1399,10 +1425,13 @@ def _tr_scan(pou, items, timers, hits):
         if it["kind"] == "stmt":
             got = _tr_in_var(it["text"])
             if got and got[0].lower() in timers and not _tr_rearmed(items, i + 1, *got):
-                rl = _tr_resets(items, got[1], i + 1)
-                if rl:
-                    hits.append((pou, it["line"], got[0], got[1], rl,
-                                 re.sub(r"\s+", " ", it["text"]).strip()[:110]))
+                for kind in timers[got[0].lower()]:
+                    # 'on' — губит гашение входа (TON), 'off' — повторное взведение (TOF)
+                    rl = _tr_forced(items, got[1], kind == "off", i + 1)
+                    if rl:
+                        hits.append((pou, it["line"], got[0], got[1], rl,
+                                     re.sub(r"\s+", " ", it["text"]).strip()[:110], kind))
+                        break
         elif it["kind"] == "if":
             for b in it["branches"]:
                 _tr_scan(pou, b["items"], timers, hits)
@@ -1428,9 +1457,13 @@ def heur_timer_reset(pous):
         body = blank_comments(d["body"])
         # «таймер» = экземпляр, чей .Q читают в этом POU, либо объявленный TON/TOF/TP.
         # Без этого правило ловило бы любой FB со входом IN.
-        timers = {m.group(1).lower() for m in re.finditer(r"\b([A-Za-z_]\w*)\.Q\b", body, re.I)}
-        timers |= {n.lower() for n, t in _iface_names(d.get("iface"), "localVars").items()
-                   if (t or "").upper() in _TR_TIMERS}
+        decl = {n.lower(): (t or "").upper()
+                for n, t in _iface_names(d.get("iface"), "localVars").items()}
+        names = {m.group(1).lower() for m in re.finditer(r"\b([A-Za-z_]\w*)\.Q\b", body, re.I)}
+        names |= {n for n, t in decl.items() if t in _TR_KNOWN}
+        # имя → какие полярности для него дефект; пустой набор (TP, BLINK) выпадает
+        timers = {n: _tr_polarity(decl.get(n, "")) for n in names}
+        timers = {n: p for n, p in timers.items() if p}
         if timers:
             _tr_scan(name, st_blocks(d["body"]), timers, hits)
     return hits
@@ -2616,6 +2649,7 @@ RULES = {
     "index-mismatch": ("medium", "Строка расставляет индексы иначе, чем группа"),
     "self-enable": ("high", "Команда зависит от собственной обратной связи"),
     "timer-reset-by-own-condition": ("high", "Таймер гасит собственное условие отсчёта"),
+    "timer-rearmed-by-own-branch": ("high", "Задержка выключения не истекает никогда"),
     "always-false-condition": ("high", "Условие не выполнится ни при каких значениях"),
     "signal-without-source": ("medium", "Аварию никто не формирует"),
     "unsigned-vs-zero": ("medium", "Беззнаковое сравнивается с нулём"),
@@ -2848,11 +2882,15 @@ def analyze(src, profiles=None, lang="ru", extra_refs=None) -> Report:
             pou=nm, line=i, code=ln,
             detail=D("self-enable", cmd=cmd, fb=ftype, out=oname, inp=inp, sig=sig)))
 
-    for nm, i, timer, var, rl, ln in heur_timer_reset(pous):
+    for nm, i, timer, var, rl, ln, kind in heur_timer_reset(pous):
+        # Два зеркальных дефекта одной природы, но последствия разные: у задержки
+        # включения выдержка не наступает, у задержки выключения — не кончается,
+        # поэтому и правила разные, с разным текстом и разной подсказкой к правке.
+        rid = ("timer-rearmed-by-own-branch" if kind == "off"
+               else "timer-reset-by-own-condition")
         findings.append(Finding(
-            rule="timer-reset-by-own-condition", severity=_sev("timer-reset-by-own-condition"),
-            title=T("timer-reset-by-own-condition"), pou=nm, line=i, code=ln,
-            detail=D("timer-reset-by-own-condition", timer=timer, var=var, rl=rl)))
+            rule=rid, severity=_sev(rid), title=T(rid), pou=nm, line=i, code=ln,
+            detail=D(rid, timer=timer, var=var, rl=rl)))
 
     for nm, i, kind, val, ln, chain in heur_always_false(pous, decl):
         # цепочка подстановки — главное в сообщении: без неё человек видит нормальное
