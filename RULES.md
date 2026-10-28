@@ -1,11 +1,11 @@
 # PLC Lint — rule reference
 
-**44 checks.** Each entry says what it reads and how to fix it. Run them on your own export at [plc-linter.com](https://plc-linter.com) — or on the [example project](examples/).
+**47 checks.** Each entry says what it reads and how to fix it. Run them on your own export at [plc-linter.com](https://plc-linter.com) — or on the [example project](examples/).
 
 Severity: 🔴 high · 🟠 medium · ⚪ low.
 
 
-## 🔴 High (19)
+## 🔴 High (22)
 
 ### `always-false-condition` — Condition can never be true
 **Reads:** A condition that becomes identically false (or identically true) once same-scan assignments are substituted. The classic shape: one program derives a command from a sensor, another checks the alarm “command present but sensor absent” — substitution turns it into `NOT X AND X`, i.e. FALSE for any X. The alarm physically cannot fire: it is listed in the log, but there is no protection. The eye does not catch it because the assignment and the check live in different POUs, with the PLC_PRG call order between them. The rule substitutes only what is known for certain within the scan: the assignment must cover every execution path, and the source program must be called earlier. If a variable is assigned in several branches, every value is substituted and the rule fires only when the result is constant for all of them.
@@ -105,6 +105,27 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 **Fix:**
 - Feed the STATE output into the command instead of a permission output that contains the input itself: `NOT bProtBlocked1` rather than `bStartAllow`. The protection keeps working — the start-count lockout is unaffected.
 - Check what is wired to the block input: the start command and the running feedback are different signals, and swapping one for the other only shows up on site.
+
+### `timer-call-overwritten` — A second call to the timer overwrites the first
+**Reads:** A timer instance holds a single state. Two calls in a row within the same branch with different inputs mean only the last one reaches the timer: the first call cannot affect anything, although it looks live in the code. Calls in MUTUALLY EXCLUSIVE branches are a legitimate pattern — start the timer in one branch, reset it via `IN := FALSE` in the other. That pattern occurs seven times in our corpus and the rule leaves it alone; it only fires when both calls sit on the same path and run in the same scan.
+
+**Fix:**
+- Keep a single call and make the input an expression: `t(IN := a AND NOT b, PT := …);`.
+- If a reset is needed, put the calls in mutually exclusive branches so exactly one runs per scan.
+
+### `timer-off-delay-in-own-branch` — Off-delay is not called when it should be counting
+**Reads:** An off-delay counts while its input is DOWN: drop the command, the delay runs, the output goes off after the setpoint. If the timer is only called inside a branch whose condition requires that same input, then at the moment the command is dropped the branch does not execute, there is no call, and the accumulated time stays at zero. The delay never ends and the equipment never stops. For an on-delay the same code is correct — it is meant to count while the condition holds — so the rule looks only at TOF and TONOF. Found by enumerating combinations and confirmed with a scan emulator: the accumulated time stayed at zero under every input behaviour tried.
+
+**Fix:**
+- Call the timer unconditionally and pass the condition to its input: put `t(IN := v, PT := …);` outside the branch and keep the branch for the actions.
+- Test the stop, not the start: starting works correctly in this code, and the defect only shows at shutdown.
+
+### `timer-preset-missing` — The timer has no preset anywhere
+**Reads:** A timer preset can be set in three ways: as a call argument, by assigning the field `t.PT := …`, or as an initial value in the declaration. If it is set nowhere, PT stays at zero and the output appears in the same scan in which the input went up. The code looks right: the call is there, the output is read, the delay is not. It differs from `timer-zero-pt` in that there the zero is written explicitly, while here the preset is simply missing — which is harder to spot by eye.
+
+**Fix:**
+- Set the preset in the call: `t(IN := v, PT := T#5S);` so it is visible next to the run condition.
+- If the preset comes from the HMI, assign the field before the call and make sure the variable is not left at zero on first start.
 
 ### `timer-rearmed-by-own-branch` — Off-delay never expires
 **Reads:** The mirror case of the previous rule, and worse in its consequences. An off-delay (TOF) counts while its input stays FALSE: drop the command, the delay runs, the output goes off after the setpoint. If the input is re-armed to TRUE on every path further down the same branch, the count restarts every scan, the output never goes off, and the equipment never stops: the pump keeps coasting, the purge never ends, the fan stays on. An on-delay defect takes the delay away; this one takes the shutdown away. The rule tells the types apart: for TON the defect is clearing the input, for TOF re-arming it, and TP and BLINK are left alone entirely, because there the input acts as an edge and has nothing to do with the delay.

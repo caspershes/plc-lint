@@ -1469,6 +1469,138 @@ def heur_timer_reset(pous):
     return hits
 
 
+# ---------- таймер не может отсчитать: три находки из матрицы ----------
+#
+# Правила ниже найдены перебором сочетаний (prototypes/timer-matrix) и проверены
+# эмулятором скана: в каждой клетке измерено, доходит ли накопленное время до
+# уставки. Там, где не доходит ни при каком поведении входов, дефект в коде,
+# а не в стенде.
+
+def _tm_sites(items, inst, conds, out):
+    """Места вызова экземпляра вместе с условиями ветвей, внутри которых он лежит."""
+    for it in items:
+        if it["kind"] == "stmt":
+            for m in _TR_CALL.finditer(it["text"]):
+                if m.group(1).lower() != inst:
+                    continue
+                a = _TR_IN.search(m.group(2))
+                out.append({"conds": list(conds), "in": a.group(1).strip() if a else None,
+                            "line": it["line"], "items": items,
+                            "text": re.sub(r"\s+", " ", it["text"]).strip()[:110]})
+        elif it["kind"] == "if":
+            for b in it["branches"]:
+                _tm_sites(b["items"], inst, conds + ([] if b.get("is_else") else [b["cond"]]), out)
+        else:
+            _tm_sites(it["items"], inst, conds, out)
+
+
+def _tm_implies(cond, var):
+    """Условие ложно всегда, когда var = FALSE? Тогда внутрь ветви при снятом
+    входе не попасть — а выдержке выключения считать именно там."""
+    f = bool_parse(cond)
+    if f is None:
+        return False
+    atoms = sorted(bool_atoms(f))
+    k = st_key(var)
+    if k not in atoms or len(atoms) > BOOL_MAX_ATOMS:
+        return False
+    rest = [a for a in atoms if a != k]
+    for mask in range(1 << len(rest)):
+        env = {a: bool(mask >> i & 1) for i, a in enumerate(rest)}
+        env[k] = False
+        if bool_eval(f, env):
+            return False
+    return True
+
+
+def _tm_instances(d):
+    """Экземпляры таймеров POU: имя → тип."""
+    return {n.lower(): (t or "").upper()
+            for n, t in _iface_names(d.get("iface"), "localVars").items()
+            if (t or "").upper() in _TR_KNOWN}
+
+
+def heur_timer_off_delay_branch(pous):
+    """TOF вызывается только внутри ветви, условие которой требует его же вход.
+
+    Задержка выключения отсчитывается, пока вход СНЯТ. Если таймер вызывают
+    только там, где вход поднят, в момент снятия команды вызова нет вовсе,
+    накопленное время стоит на нуле, и выдержка не кончается никогда —
+    оборудование не выключается. Для TON тот же код безупречен: он и должен
+    считать, пока условие истинно. Замер на эмуляторе: ET остался 0 из 5000 мс
+    при всех четырёх поведениях входов."""
+    hits = []
+    for name, d in pous.items():
+        tree = st_blocks(d["body"] or "")
+        for inst, typ in _tm_instances(d).items():
+            if typ not in ("TOF", "TONOF"):
+                continue
+            sites = []
+            _tm_sites(tree, inst, [], sites)
+            if not sites:
+                continue
+            if all(s["in"] and any(_tm_implies(c, s["in"]) for c in s["conds"]) for s in sites):
+                hits.append((name, sites[0]["line"], inst, sites[0]["in"], sites[0]["text"]))
+    return hits
+
+
+def heur_timer_call_overwritten(pous):
+    """Два вызова одного экземпляра подряд в одной ветви с разными IN.
+
+    Второй вызов перетирает первый в том же скане: до таймера доходит только
+    последнее значение входа. Вызовы во ВЗАИМОИСКЛЮЧАЮЩИХ ветвях — приём
+    законный («в одной ветви пускаем, в другой сбрасываем»), он встретился на
+    корпусе семь раз и правилом не трогается."""
+    hits = []
+    for name, d in pous.items():
+        tree = st_blocks(d["body"] or "")
+        for inst in _tm_instances(d):
+            sites = []
+            _tm_sites(tree, inst, [], sites)
+            with_in = [s for s in sites if s["in"]]
+            for i in range(len(with_in) - 1):
+                a, b = with_in[i], with_in[i + 1]
+                if a["items"] is b["items"] and st_key(a["in"]) != st_key(b["in"]):
+                    hits.append((name, b["line"], inst, a["in"], b["in"], a["line"], b["text"]))
+                    break
+    return hits
+
+
+def heur_timer_preset_missing(pous):
+    """У экземпляра нигде не задана уставка: ни в вызове, ни полем, ни в объявлении.
+
+    PT остаётся нулевым, и выход появляется в том же скане, в котором подняли
+    вход, — выдержки нет вовсе."""
+    hits = []
+    for name, d in pous.items():
+        body = blank_comments(d["body"] or "")
+        iface = d.get("iface")
+        tree = st_blocks(d["body"] or "")
+        for inst, typ in _tm_instances(d).items():
+            sites = []
+            _tm_sites(tree, inst, [], sites)
+            if not sites:
+                continue          # не вызван вовсе — это другое правило
+            if any(re.search(r"\bPT\s*:=", _TR_CALL.match(s["text"]).group(2), re.I)
+                   for s in sites if _TR_CALL.match(s["text"])):
+                continue
+            if re.search(rf"\b{re.escape(inst)}\s*\.\s*PT\s*:=", body, re.I):
+                continue
+            if iface is not None and _tm_decl_has_pt(iface, inst):
+                continue
+            hits.append((name, sites[0]["line"], inst, typ, sites[0]["text"]))
+    return hits
+
+
+def _tm_decl_has_pt(iface, inst):
+    """Уставка задана начальным значением в объявлении: `t : TON := (PT := T#5S);`"""
+    for v in iface.iter(q("variable")):
+        if (v.get("name") or "").lower() != inst:
+            continue
+        return "PT" in "".join(v.itertext()).upper()
+    return False
+
+
 # ---------- условие, тождественно ложное после подстановки ----------
 _AF_IN = re.compile(r"\bIN\s*:=\s*([^,)]+)", re.I | re.S)
 _AF_CALL = re.compile(r"^\s*([A-Za-z_]\w*)\s*\(\s*\)\s*;", re.M)
@@ -2650,6 +2782,9 @@ RULES = {
     "self-enable": ("high", "Команда зависит от собственной обратной связи"),
     "timer-reset-by-own-condition": ("high", "Таймер гасит собственное условие отсчёта"),
     "timer-rearmed-by-own-branch": ("high", "Задержка выключения не истекает никогда"),
+    "timer-off-delay-in-own-branch": ("high", "Выдержку выключения не вызывают, когда она должна считать"),
+    "timer-call-overwritten": ("high", "Второй вызов таймера перетирает первый"),
+    "timer-preset-missing": ("high", "У таймера нигде не задана уставка"),
     "always-false-condition": ("high", "Условие не выполнится ни при каких значениях"),
     "signal-without-source": ("medium", "Аварию никто не формирует"),
     "unsigned-vs-zero": ("medium", "Беззнаковое сравнивается с нулём"),
@@ -2891,6 +3026,24 @@ def analyze(src, profiles=None, lang="ru", extra_refs=None) -> Report:
         findings.append(Finding(
             rule=rid, severity=_sev(rid), title=T(rid), pou=nm, line=i, code=ln,
             detail=D(rid, timer=timer, var=var, rl=rl)))
+
+    for nm, i, timer, var, ln in heur_timer_off_delay_branch(pous):
+        findings.append(Finding(
+            rule="timer-off-delay-in-own-branch", severity=_sev("timer-off-delay-in-own-branch"),
+            title=T("timer-off-delay-in-own-branch"), pou=nm, line=i, code=ln,
+            detail=D("timer-off-delay-in-own-branch", timer=timer, var=var)))
+
+    for nm, i, timer, v1, v2, l1, ln in heur_timer_call_overwritten(pous):
+        findings.append(Finding(
+            rule="timer-call-overwritten", severity=_sev("timer-call-overwritten"),
+            title=T("timer-call-overwritten"), pou=nm, line=i, code=ln,
+            detail=D("timer-call-overwritten", timer=timer, first=v1, second=v2, fl=l1)))
+
+    for nm, i, timer, typ, ln in heur_timer_preset_missing(pous):
+        findings.append(Finding(
+            rule="timer-preset-missing", severity=_sev("timer-preset-missing"),
+            title=T("timer-preset-missing"), pou=nm, line=i, code=ln,
+            detail=D("timer-preset-missing", timer=timer, type=typ)))
 
     for nm, i, kind, val, ln, chain in heur_always_false(pous, decl):
         # цепочка подстановки — главное в сообщении: без неё человек видит нормальное
