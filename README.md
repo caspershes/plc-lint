@@ -1,64 +1,34 @@
 # PLC Lint — static analysis for CODESYS / PLCopenXML
 
-**Upload a PLC project export, get a quality report in ~10 seconds.**
+**Drop a PLC project export on it, get a quality report in ~10 seconds.**
 
 Your project compiles clean and still ships with an uncalled timer, a truncated
 setpoint, or a divide-by-a-variable-that's-sometimes-zero. The compiler doesn't
 catch it — the syntax is valid. PLC Lint does.
 
-👉 **Try it free (no signup): [plc-linter.com](https://plc-linter.com)** &nbsp;·&nbsp; **Or run it locally: [plc-lint.exe](https://github.com/caspershes/plc-lint/releases/latest)**
-&nbsp;·&nbsp; **Live sample report: [plc-linter.com/demo](https://plc-linter.com/demo)**
+👉 **Try it free (no signup): [plc-linter.com](https://plc-linter.com)** &nbsp;·&nbsp; **Run it locally: [plc-lint.exe](https://github.com/caspershes/plc-lint/releases/latest)** &nbsp;·&nbsp; **[Live sample report](https://plc-linter.com/demo)**
 
-> **Run it locally — nothing leaves your machine.** Windows: grab
-> [`plc-lint.exe`](https://github.com/caspershes/plc-lint/releases/latest) and drop your
-> `.xml` or `.export` onto it. Anywhere else: `python cli.py project.xml`. No install, no
-> dependencies,
-> **no network calls at all** — that last part is enforced by a test, not by a promise
-> ([`tests/cli_local.py`](tests/cli_local.py) runs the whole analysis with `socket` replaced
-> by one that raises). The hosted version at [plc-linter.com](https://plc-linter.com) is the
-> same engine with sharing, history and certificates on top.
+This is the report on the known-bad project bundled in [`examples/`](examples/) — every
+finding on it is listed there, so you can check the tool against a known answer before
+you point it at anything of your own:
+
+![PLC Lint report on the bundled known-bad project](examples/report.png)
+
+The same run in a terminal, if you prefer the console:
+
+```
+  project   (synthetic_bugs.xml)
+  ──────────────────────────────────────────────────────────────────
+  0/100   10 · 12 · 13   POU 7
+
+  CRITICAL (10)
+    • CFC: division by a literal zero  [CfcDiv]
+      the divisor of the DIV block is wired to a literal 0 → a guaranteed division by zero
+      → Wire a variable/setpoint into the divisor input instead of the literal 0 — usually
+        a debug stub left behind.
+```
 
 ---
-
-## What it eats
-
-Any **PLCopenXML** export (`tc6_0200`, PLCopen TC6 — the vendor-neutral
-IEC 61131-3 format):
-
-- **CODESYS 3.5** (`Project → Export PLCopenXML`)
-- **TwinCAT3** (Beckhoff — same engine, same namespace)
-- **WAGO e!COCKPIT, Schneider EcoStruxure Machine Expert, OWEN, Weintek** and
-  the 500+ environments built on the CODESYS 3.5 runtime
-
-And, locally, a **CODESYS ExportFile** (`.export`, `Project → Export`). That format carries
-what PLCopenXML leaves out — the device tree and the visualisation — on top of the programs
-themselves. So **every program rule works there too**, plus five checks that no analyser
-does, because every analyser reads ST:
-
-| Finding | What it means on site |
-|---|---|
-| sensor type cleared on a wired channel | the channel is not digitised and the variable stays at zero — and for an outdoor sensor zero reads as a plausible 0 °C |
-| output bound, signal type not selected | the command goes nowhere, the actuator does not move |
-| module excluded from polling | a whole cabinet of signals is dead while the program keeps stale values |
-| one variable under two captions | a copied element kept its neighbour's binding: "pump 2" shows pump 1 |
-| caption number ≠ variable index | "Boiler 3" next to `alarm_kotel[2]` |
-
-In an export a POU body is stored line by line and the declarations sit in a separate
-section, so the parser rebuilds them into a PLCopenXML-shaped tree and hands that to the
-usual analyser — one rule set, one set of texts, no second engine to drift apart. The
-format is detected by content, not by extension, and parsing is streaming: a 29 MB export
-costs 47 MB of memory instead of the 204 MB a full tree would take, and a live project
-comes out as 25 POUs and 205 globals in about two seconds.
-
-An export also shows what the programs do **not** say. Screen bindings and unit-conversion
-objects count as uses, so a setpoint that lives only on a screen is no longer reported as
-dead — on a live project the whole weather curve is built from unit conversions and never
-appears in ST. The same data turns "nothing writes this alarm" from a guess into a fact,
-which is why that finding is raised to critical on `.export` and stays a warning on
-PLCopenXML.
-
-What an export does **not** give: the task configuration is laid out differently there, so
-the watchdog and duplicate-Modbus-address rules stay quiet on `.export` rather than guess.
 
 ## What it catches
 
@@ -80,6 +50,33 @@ naming-standard profiles, device/IO-mapping summary.
 A known-bad project you can upload yourself, with every expected finding listed:
 [examples/](examples/).
 
+## What it eats
+
+Any **PLCopenXML** export (`tc6_0200`, PLCopen TC6 — the vendor-neutral
+IEC 61131-3 format):
+
+- **CODESYS 3.5** (`Project → Export PLCopenXML`)
+- **TwinCAT3** (Beckhoff — same engine, same namespace)
+- **WAGO e!COCKPIT, Schneider EcoStruxure Machine Expert, OWEN, Weintek** and
+  the 500+ environments built on the CODESYS 3.5 runtime
+
+And, locally, a **CODESYS ExportFile** (`.export`, `Project → Export`). That format carries
+what PLCopenXML leaves out — the device tree and the visualisation. Every program rule
+works there too, plus five checks that no analyser does, because every analyser reads ST:
+
+| Finding | What it means on site |
+|---|---|
+| sensor type cleared on a wired channel | the channel is not digitised and the variable stays at zero — and for an outdoor sensor zero reads as a plausible 0 °C |
+| output bound, signal type not selected | the command goes nowhere, the actuator does not move |
+| module excluded from polling | a whole cabinet of signals is dead while the program keeps stale values |
+| one variable under two captions | a copied element kept its neighbour's binding: "pump 2" shows pump 1 |
+| caption number ≠ variable index | "Boiler 3" next to `alarm_kotel[2]` |
+
+The task configuration is laid out differently in an export, so the watchdog and
+duplicate-Modbus-address rules stay silent there — run the PLCopenXML export too if you
+need those. How the format is parsed, and the three things that cost time:
+[docs/export-format.md](docs/export-format.md).
+
 ## Run it on your own machine
 
 Your customer's export is their intellectual property, and sending it to somebody else's
@@ -92,6 +89,10 @@ Windows has not seen this binary before and it is not code-signed, so SmartScree
 "unknown publisher" — "More info" → "Run anyway", or run it from a terminal.
 
 **Anywhere with Python 3.9+:** no dependencies, the engine is standard library only.
+
+**No network calls at all** — and that is enforced by a test, not by a promise:
+[`tests/cli_local.py`](tests/cli_local.py) runs the whole analysis with `socket` replaced
+by one that raises.
 
 ```
 python cli.py project.xml                # report in the console + HTML next to the file
@@ -109,7 +110,7 @@ the acceptance protocol and the signed certificate. What only the local version 
 export does not belong in a browser upload, and that file is the one you are least likely
 to be allowed to send anywhere.
 
-### In CI
+## In CI
 
 If your PLC project lives in git, the export can be checked on every push. There's a
 GitHub Action in this repository:
