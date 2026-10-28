@@ -29,12 +29,27 @@ def resolve_locale(host, cookie):
     return DEFAULT_LANG
 
 
+def plural_ru(n, one, few, many):
+    """«1 проверка · 2 проверки · 47 проверок». Правило школьное, но его забывают,
+    и строка с жёстким окончанием верна только для части чисел: «44 проверки»
+    читается нормально, а «47 проверки» — нет."""
+    n = abs(int(n))
+    if n % 100 in range(11, 15):
+        return many
+    last = n % 10
+    return one if last == 1 else few if last in (2, 3, 4) else many
+
+
 def t(key, lang, **kw):
     """Строка по ключу для языка lang; fallback на DEFAULT_LANG, затем на сам ключ."""
     s = STRINGS.get(lang, {}).get(key)
     if s is None:
         s = STRINGS[DEFAULT_LANG].get(key, key)
     if kw:
+        # Падеж существительного зависит от числа, и подставлять его должен не
+        # вызывающий: он про число ничего не знает, а строк с числами много.
+        if lang == "ru" and "n" in kw and "{checks}" in s:
+            kw = dict(kw, checks=plural_ru(kw["n"], "проверка", "проверки", "проверок"))
         try:
             s = s.format(**kw)
         except (KeyError, IndexError, ValueError):
@@ -149,7 +164,7 @@ STRINGS = {
     "index.sev_high": "Из-за этого контроллер встанет или пойдёт вразнос ({n})",
     "index.sev_medium": "Тихие дефекты: работает, но не так, как задумано ({n})",
     "index.sev_low": "Стиль и сопровождаемость ({n})",
-    "index.rule_total": "· всего {n} проверки",
+    "index.rule_total": "· всего {n} {checks}",
     # первый экран прямо предлагает загрузить ЧУЖОЙ код («приняли чужой ПЛК-проект?») —
     # значит и ответ на «а что вы с ним сделаете» должен стоять здесь, а не в подвале
     "index.privacy": ('Файл обрабатывается <strong>в памяти</strong> и на диск не пишется — '
@@ -1354,7 +1369,8 @@ ACCEPTANCE_Q = {
     "timer-reset-by-own-condition": "Таймер отсчитывает по переменной, которую гасят ниже в той же ветви ({n}). Какая выдержка здесь задумана и чем она обеспечена?",
     "timer-rearmed-by-own-branch": "Задержка выключения считает по переменной, которую ниже в той же ветви взводят заново ({n}). Чем здесь обеспечено само выключение?",
     "timer-off-delay-in-own-branch": "Задержка выключения вызывается только внутри ветви, требующей её же вход ({n}). Чем тогда отсчитывается выдержка после снятия команды?",
-    "timer-call-overwritten": "Экземпляр таймера вызывается дважды подряд с разными входами ({n}). Какой из двух вызовов должен работать?",
+    "fb-call-overwritten": "Экземпляр ФБ вызывается дважды подряд с разными входами ({n}). Какой из двух вызовов должен работать?",
+    "edge-lost-in-own-branch": "Детектор фронта вызывается только внутри ветви, требующей его же вход ({n}). Сколько раз он должен срабатывать на серию событий?",
     "timer-preset-missing": "У таймера нигде не задана уставка ({n}). Какая выдержка здесь подразумевалась?",
     "always-false-condition": "Есть условия, которые после подстановки значений этого же скана не выполняются никогда ({n}). Что должно было происходить по этим условиям?",
     "signal-without-source": "Сигнал аварии читается в условиях, но его никто не формирует ({n}). Откуда он должен приходить — не дошла привязка или проверка написана «на будущее»?",
@@ -1403,7 +1419,8 @@ ACCEPTANCE_Q = {
     "timer-reset-by-own-condition": "A timer runs on a variable that is cleared further down the same branch ({n}). What delay was intended here, and what provides it?",
     "timer-rearmed-by-own-branch": "An off-delay runs on a variable that is re-armed further down the same branch ({n}). What actually ends the delay here?",
     "timer-off-delay-in-own-branch": "An off-delay is only called inside a branch that requires its own input ({n}). What counts the delay once the command is dropped?",
-    "timer-call-overwritten": "A timer instance is called twice in a row with different inputs ({n}). Which of the two calls is meant to work?",
+    "fb-call-overwritten": "An FB instance is called twice in a row with different inputs ({n}). Which of the two calls is meant to work?",
+    "edge-lost-in-own-branch": "An edge detector is only called inside a branch that requires its own input ({n}). How many times is it meant to fire over a series of events?",
     "timer-preset-missing": "The timer has no preset set anywhere ({n}). What delay was intended here?",
     "always-false-condition": "Some conditions never hold once same-scan assignments are substituted ({n}). What was supposed to happen on those conditions?",
     "signal-without-source": "An alarm signal is read in conditions but nothing ever sets it ({n}). Where should it come from — a missing binding, or a check written for later?",
@@ -1492,7 +1509,8 @@ RULE_SHORT = {
     "timer-reset-by-own-condition": "пауза живёт один цикл задачи: вход таймера гасят ниже по ветви",
     "timer-rearmed-by-own-branch": "выдержка выключения не кончается: вход таймера взводят заново ниже по ветви",
     "timer-off-delay-in-own-branch": "TOF вызывают только там, где его вход поднят — отсчитывать нечем",
-    "timer-call-overwritten": "один экземпляр вызван дважды подряд с разными входами",
+    "fb-call-overwritten": "один экземпляр ФБ вызван дважды подряд с разными входами",
+    "edge-lost-in-own-branch": "R_TRIG/F_TRIG вызывают только там, где вход поднят — снятия он не видит",
     "timer-preset-missing": "PT не задан ни в вызове, ни полем, ни в объявлении — выдержки нет",
     "always-false-condition": "`NOT X AND X` после подстановки: строка в журнале есть, защиты нет",
     "signal-without-source": "блокировка читает сигнал, который навсегда остаётся в нуле",
@@ -1541,7 +1559,8 @@ RULE_SHORT = {
     "timer-reset-by-own-condition": "the pause lasts one task cycle — the timer input is dropped below",
     "timer-rearmed-by-own-branch": "the equipment is never released: the TOF input is re-armed in the same branch",
     "timer-off-delay-in-own-branch": "the TOF is only called while its input is up, so it never counts",
-    "timer-call-overwritten": "one instance is called twice in a row with different inputs",
+    "fb-call-overwritten": "one instance is called twice in a row with different inputs",
+    "edge-lost-in-own-branch": "the R_TRIG/F_TRIG is only called while its input is up, so it never sees the drop",
     "timer-preset-missing": "PT is set neither in the call, nor as a field, nor in the declaration",
     "always-false-condition": "`NOT X AND X` after substitution: listed in the log, no protection",
     "signal-without-source": "an interlock reads a flag that stays at zero forever",
@@ -1614,7 +1633,8 @@ RULE_HELP = {
     "timer-reset-by-own-condition": "Таймер считает по переменной, которую ниже в той же ветви гасят на всех путях. Скан N: вход TRUE, отсчёт пошёл, переменную сбросили. Скан N+1: вход уже FALSE, таймер обнулён вместе с накопленным временем, а условие, которое ждало выдержки, открыто. Пауза живёт один цикл задачи вместо уставки — на боевом объекте это 0,01 с при заданных 30 с. Код компилируется, читается как правильный, уставка есть на экране, оператор её крутит, и она ни на что не влияет. Правило смотрит дерево ветвей, а не соседство строк: сброс под условием (`IF T.Q THEN V := FALSE`) — это штатный одновыстрел, таймер успевает отсчитать выдержку, и такой код правило не трогает.",
     "timer-rearmed-by-own-branch": "Зеркальный случай к предыдущему, и по последствиям он хуже. Задержка выключения (TOF) отсчитывает, пока вход держится FALSE: сняли команду — выдержка пошла — через уставку выход погас. Если ниже в той же ветви вход на всех путях снова взводят в TRUE, отсчёт каждый скан начинается заново, выход не гаснет никогда, и оборудование не останавливается: насос с выбегом крутится, продувка не кончается, вентилятор не выключается. У задержки включения дефект отнимает выдержку, здесь — отнимает само выключение. Правило различает тип таймера: для TON дефект — гашение входа, для TOF — его повторное взведение, а TP и BLINK не трогает вовсе, потому что у них вход работает как фронт и к выдержке отношения не имеет.",
     "timer-off-delay-in-own-branch": "Задержка выключения отсчитывает время, пока вход СНЯТ: сняли команду — пошла выдержка — через уставку выход погас. Если таймер вызывают только внутри ветви, условие которой требует этот же вход, то в момент снятия команды ветвь не исполняется, вызова нет, и накопленное время стоит на нуле. Выдержка не кончается никогда, оборудование не выключается. Для задержки включения тот же код безупречен: она и должна считать, пока условие истинно, — поэтому правило смотрит только на TOF и TONOF. Найдено перебором сочетаний и проверено эмулятором скана: накопленное время осталось нулевым при всех опробованных поведениях входов.",
-    "timer-call-overwritten": "Экземпляр таймера хранит одно состояние. Два вызова подряд в одной ветви с разными входами означают, что до таймера доходит только последний: первый вызов не успевает ни на что повлиять, хотя в коде выглядит рабочим. Вызовы во ВЗАИМОИСКЛЮЧАЮЩИХ ветвях — приём законный: в одной ветви таймер пускают, в другой сбрасывают через `IN := FALSE`. На нашем корпусе такой приём встретился семь раз, и правило его не трогает; оно срабатывает только когда оба вызова стоят на одном пути и исполняются в одном скане.",
+    "fb-call-overwritten": "Экземпляр ФБ с памятью — таймер или детектор фронта — хранит одно состояние. Два вызова подряд в одной ветви с разными входами означают, что до таймера доходит только последний: первый вызов не успевает ни на что повлиять, хотя в коде выглядит рабочим. Вызовы во ВЗАИМОИСКЛЮЧАЮЩИХ ветвях — приём законный: в одной ветви таймер пускают, в другой сбрасывают через `IN := FALSE`. На нашем корпусе такой приём встретился семь раз, и правило его не трогает; оно срабатывает только когда оба вызова стоят на одном пути и исполняются в одном скане.",
+    "edge-lost-in-own-branch": "Детектор фронта сравнивает вход с тем, что видел в прошлый свой вызов. Если его вызывают только внутри ветви, условие которой требует этот же вход, снятия входа он не застаёт: ветвь в этот момент не исполняется. Внутренняя память остаётся взведённой, и каждый следующий подъём фронтом уже не считается. Замер на эмуляторе скана: десять переходов входа — одно срабатывание, девять потеряны. Коварство в том, что ПЕРВЫЙ фронт проходит нормально, поэтому при проверке на объекте «нажали — сработало» дефект не виден, он всплывает со второго раза.",
     "timer-preset-missing": "Уставку таймера можно задать тремя способами: аргументом вызова, присваиванием в поле `t.PT := …` или начальным значением в объявлении. Если её нет нигде, PT остаётся нулевым, и выход появляется в том же скане, в котором подняли вход. Код при этом выглядит правильным: вызов есть, выход читают, выдержки нет. От правила `timer-zero-pt` отличается тем, что там ноль написан явно, а здесь уставку просто забыли — и заметить это глазами труднее.",
     "always-false-condition": "Условие, которое после подстановки присваиваний этого же скана оказывается тождественно ложным (или тождественно истинным). Классика: одна программа формирует команду от датчика, другая проверяет аварию «команда есть, а датчика нет» — и после подстановки выходит `NOT X AND X`, то есть FALSE при любом X. Авария физически не может сработать: строка в журнале есть, защиты нет. Глазами это не ловится, потому что присваивание и проверка лежат в разных POU, а между ними — порядок вызова из PLC_PRG. Правило подставляет только то, что в этом скане известно точно: присваивание должно покрывать все пути исполнения, а программа-источник — вызываться раньше. Если переменной присвоено в нескольких ветвях, подставляется каждое значение, и правило срабатывает лишь когда константа выходит при всех.",
     "signal-without-source": "Булев сигнал состояния (авария, ошибка, неисправность) читается в условиях программы, но ни одна строка кода и ни один канал модуля его не записывают. Значит он навсегда остаётся в нуле: блокировка по аварии не сработает ни разу, лампа на мнемосхеме не загорится, в журнале останется мёртвая строка. На объекте такое выглядит как исправная защита — именно потому, что она не срабатывает. Типичная причина: сигнал ждали снаружи (его должны были завести электрики, или опрос по шине так и не дописали), а условие в коде уже стоит. Правило намеренно смотрит только на имена аварий и только на булевы: команды и уставки законно пишутся с экрана визуализации, а показания датчиков — прямо с канала, и в экспорте PLCopenXML ни того, ни другого не видно. Всё, что привязано к каналу в дереве устройств или упомянуто в графическом теле, правило не трогает.",
@@ -1663,7 +1683,8 @@ RULE_HELP = {
     "timer-reset-by-own-condition": "A timer counts on a variable that is cleared on every path further down the same branch. Scan N: the input is TRUE, counting starts, the variable is dropped. Scan N+1: the input is already FALSE, the timer is reset together with the accumulated time, and the condition that was waiting for the delay is open. The pause lasts one task cycle instead of the setpoint — on a live site that was 0.01 s against the 30 s configured. The code compiles, reads as correct, the setpoint is on the screen, the operator adjusts it, and it changes nothing. The rule looks at the branch tree, not at adjacent lines: a reset under a condition (`IF T.Q THEN V := FALSE`) is the normal one-shot pattern, the timer does complete its delay, and such code is left alone.",
     "timer-rearmed-by-own-branch": "The mirror case of the previous rule, and worse in its consequences. An off-delay (TOF) counts while its input stays FALSE: drop the command, the delay runs, the output goes off after the setpoint. If the input is re-armed to TRUE on every path further down the same branch, the count restarts every scan, the output never goes off, and the equipment never stops: the pump keeps coasting, the purge never ends, the fan stays on. An on-delay defect takes the delay away; this one takes the shutdown away. The rule tells the types apart: for TON the defect is clearing the input, for TOF re-arming it, and TP and BLINK are left alone entirely, because there the input acts as an edge and has nothing to do with the delay.",
     "timer-off-delay-in-own-branch": "An off-delay counts while its input is DOWN: drop the command, the delay runs, the output goes off after the setpoint. If the timer is only called inside a branch whose condition requires that same input, then at the moment the command is dropped the branch does not execute, there is no call, and the accumulated time stays at zero. The delay never ends and the equipment never stops. For an on-delay the same code is correct — it is meant to count while the condition holds — so the rule looks only at TOF and TONOF. Found by enumerating combinations and confirmed with a scan emulator: the accumulated time stayed at zero under every input behaviour tried.",
-    "timer-call-overwritten": "A timer instance holds a single state. Two calls in a row within the same branch with different inputs mean only the last one reaches the timer: the first call cannot affect anything, although it looks live in the code. Calls in MUTUALLY EXCLUSIVE branches are a legitimate pattern — start the timer in one branch, reset it via `IN := FALSE` in the other. That pattern occurs seven times in our corpus and the rule leaves it alone; it only fires when both calls sit on the same path and run in the same scan.",
+    "fb-call-overwritten": "A stateful FB instance — a timer or an edge detector — holds a single state. Two calls in a row within the same branch with different inputs mean only the last one reaches the timer: the first call cannot affect anything, although it looks live in the code. Calls in MUTUALLY EXCLUSIVE branches are a legitimate pattern — start the timer in one branch, reset it via `IN := FALSE` in the other. That pattern occurs seven times in our corpus and the rule leaves it alone; it only fires when both calls sit on the same path and run in the same scan.",
+    "edge-lost-in-own-branch": "An edge detector compares its input with what it saw at its previous call. If it is only called inside a branch whose condition requires that same input, it never witnesses the input going down: at that moment the branch does not execute. Its internal memory stays latched, and every later rise no longer counts as an edge. Measured on a scan emulator: ten input transitions produced one pulse, nine were lost. The trap is that the FIRST edge works normally, so a quick check on site — press it, it fires — shows nothing; the defect appears from the second time on.",
     "timer-preset-missing": "A timer preset can be set in three ways: as a call argument, by assigning the field `t.PT := …`, or as an initial value in the declaration. If it is set nowhere, PT stays at zero and the output appears in the same scan in which the input went up. The code looks right: the call is there, the output is read, the delay is not. It differs from `timer-zero-pt` in that there the zero is written explicitly, while here the preset is simply missing — which is harder to spot by eye.",
     "always-false-condition": "A condition that becomes identically false (or identically true) once same-scan assignments are substituted. The classic shape: one program derives a command from a sensor, another checks the alarm “command present but sensor absent” — substitution turns it into `NOT X AND X`, i.e. FALSE for any X. The alarm physically cannot fire: it is listed in the log, but there is no protection. The eye does not catch it because the assignment and the check live in different POUs, with the PLC_PRG call order between them. The rule substitutes only what is known for certain within the scan: the assignment must cover every execution path, and the source program must be called earlier. If a variable is assigned in several branches, every value is substituted and the rule fires only when the result is constant for all of them.",
     "signal-without-source": "A boolean state signal (alarm, error, fault) is read in the program's conditions, but no line of code and no module channel ever writes it. It therefore stays at zero forever: the alarm interlock never trips, the lamp on the screen never lights, the log keeps a dead entry. On site this looks like a healthy protection precisely because it never fires. The usual cause: the signal was expected from outside — the wiring was to be delivered by someone else, or the fieldbus polling was never finished — while the condition is already in the code. The rule deliberately looks only at alarm-style names and only at booleans: commands and setpoints are legitimately written from the visualisation, and sensor values come straight from a channel, and a PLCopenXML export shows neither. Anything bound to a channel in the device tree or mentioned in a graphical body is left alone.",
@@ -1781,9 +1802,13 @@ RULE_FIX = {
         "Вызывайте таймер безусловно, а условие подавайте на его вход: `t(IN := v, PT := …);` вне ветви, а ветвь оставьте для действий.",
         "Проверяйте на объекте останов, а не пуск: пуск в таком коде отрабатывает правильно, и дефект виден только в момент выключения.",
     ],
-    "timer-call-overwritten": [
+    "fb-call-overwritten": [
         "Оставьте один вызов, а выбор входа сделайте выражением: `t(IN := a AND NOT b, PT := …);`.",
         "Если нужен сброс, разведите вызовы по взаимоисключающим ветвям — тогда в скане исполнится ровно один.",
+    ],
+    "edge-lost-in-own-branch": [
+        "Вызывайте детектор безусловно, а условие подавайте на вход: `r(CLK := v);` вне ветви, внутри ветви оставьте только действия по `r.Q`.",
+        "Проверяйте на объекте дважды подряд: первое срабатывание проходит всегда, дефект виден со второго.",
     ],
     "timer-preset-missing": [
         "Задайте уставку в вызове: `t(IN := v, PT := T#5S);` — так она видна рядом с условием отсчёта.",
@@ -1963,9 +1988,13 @@ RULE_FIX = {
         "Call the timer unconditionally and pass the condition to its input: put `t(IN := v, PT := …);` outside the branch and keep the branch for the actions.",
         "Test the stop, not the start: starting works correctly in this code, and the defect only shows at shutdown.",
     ],
-    "timer-call-overwritten": [
+    "fb-call-overwritten": [
         "Keep a single call and make the input an expression: `t(IN := a AND NOT b, PT := …);`.",
         "If a reset is needed, put the calls in mutually exclusive branches so exactly one runs per scan.",
+    ],
+    "edge-lost-in-own-branch": [
+        "Call the detector unconditionally and pass the condition to its input: `r(CLK := v);` outside the branch, and keep only the actions on `r.Q` inside.",
+        "Test it twice in a row on site: the first pulse always works, the defect shows from the second.",
     ],
     "timer-preset-missing": [
         "Set the preset in the call: `t(IN := v, PT := T#5S);` so it is visible next to the run condition.",
@@ -2166,7 +2195,8 @@ RULE_TITLE = {
     "timer-reset-by-own-condition": "Таймер гасит собственное условие отсчёта",
     "timer-rearmed-by-own-branch": "Задержка выключения не истекает никогда",
     "timer-off-delay-in-own-branch": "Выдержку выключения не вызывают, когда она должна считать",
-    "timer-call-overwritten": "Второй вызов таймера перетирает первый",
+    "fb-call-overwritten": "Второй вызов экземпляра перетирает первый",
+    "edge-lost-in-own-branch": "Детектор фронта теряет все фронты, кроме первого",
     "timer-preset-missing": "У таймера нигде не задана уставка",
     "always-false-condition": "Условие не выполнится ни при каких значениях",
     "signal-without-source": "Аварию никто не формирует",
@@ -2215,7 +2245,8 @@ RULE_TITLE = {
     "timer-reset-by-own-condition": "Timer cleared by its own run condition",
     "timer-rearmed-by-own-branch": "Off-delay never expires",
     "timer-off-delay-in-own-branch": "Off-delay is not called when it should be counting",
-    "timer-call-overwritten": "A second call to the timer overwrites the first",
+    "fb-call-overwritten": "A second call to the instance overwrites the first",
+    "edge-lost-in-own-branch": "Edge detector loses every edge but the first",
     "timer-preset-missing": "The timer has no preset anywhere",
     "always-false-condition": "Condition can never be true",
     "signal-without-source": "Nothing ever raises this alarm",
@@ -2268,7 +2299,8 @@ DETAIL = {
     "timer-reset-by-own-condition": "таймер `{timer}` отсчитывает по `{var}`, а `{var}` гасится в строке {rl} на всех путях этой же ветви — на следующем скане вход уже FALSE, накопленное время обнулено, и выдержка живёт один цикл задачи вместо уставки",
     "timer-rearmed-by-own-branch": "таймер `{timer}` отсчитывает задержку выключения по `{var}`, а `{var}` снова взводится в строке {rl} на всех путях этой же ветви — отсчёт начинается заново на каждом скане, выдержка не истекает никогда, и команда с выхода не снимается",
     "timer-off-delay-in-own-branch": "таймер `{timer}` — задержка выключения, но все его вызовы лежат внутри ветви, требующей `{var}`: когда `{var}` снимут, вызова не будет, и выдержка не начнёт отсчитываться",
-    "timer-call-overwritten": "экземпляр `{timer}` вызван дважды подряд: в строке {fl} со входом `{first}`, затем со входом `{second}` — до таймера дойдёт только второй, первый вызов не делает ничего",
+    "fb-call-overwritten": "экземпляр `{timer}` вызван дважды подряд: в строке {fl} со входом `{first}`, затем со входом `{second}` — до таймера дойдёт только второй, первый вызов не делает ничего",
+    "edge-lost-in-own-branch": "детектор `{edge}` ({type}) вызывается только внутри ветви, требующей `{var}`: снятия входа он не видит, память остаётся взведённой, и все фронты после первого теряются",
     "timer-preset-missing": "у экземпляра `{timer}` типа {type} уставка не задана ни в вызове, ни присваиванием в поле, ни в объявлении — PT остаётся нулевым, и выход появится в том же скане, что и вход",
     "always-false-condition": "{what} всегда {val}, если подставить значения этого же скана: {steps}",
     "signal-without-source": "`{var}` читается в условиях ({readers}), но ни одна строка кода и ни один канал модуля его не записывают — сигнал навсегда остаётся в нуле, и защита по нему не срабатывает ни разу",
@@ -2318,7 +2350,8 @@ DETAIL = {
     "timer-reset-by-own-condition": "timer `{timer}` runs on `{var}`, and `{var}` is cleared at line {rl} on every path of the same branch — on the next scan the input is already FALSE, the accumulated time is gone, and the delay lasts one task cycle instead of the setpoint",
     "timer-rearmed-by-own-branch": "timer `{timer}` runs an off-delay on `{var}`, and `{var}` is re-armed at line {rl} on every path of the same branch — the count restarts every scan, the delay never expires, and the output is never released",
     "timer-off-delay-in-own-branch": "timer `{timer}` is an off-delay, yet every call to it sits inside a branch that requires `{var}`: once `{var}` is dropped there is no call at all, so the delay never starts counting",
-    "timer-call-overwritten": "instance `{timer}` is called twice in a row: at line {fl} with input `{first}`, then with input `{second}` — only the second one reaches the timer, the first call does nothing",
+    "fb-call-overwritten": "instance `{timer}` is called twice in a row: at line {fl} with input `{first}`, then with input `{second}` — only the second one reaches the timer, the first call does nothing",
+    "edge-lost-in-own-branch": "detector `{edge}` ({type}) is only called inside a branch that requires `{var}`: it never sees the input go down, its memory stays latched, and every edge after the first is lost",
     "timer-preset-missing": "instance `{timer}` of type {type} has no preset in the call, no field assignment and no initial value — PT stays at zero, so the output appears in the same scan as the input",
     "always-false-condition": "{what} is always {val} once same-scan values are substituted: {steps}",
     "signal-without-source": "`{var}` is read in conditions ({readers}), but no line of code and no module channel ever writes it — the signal stays at zero forever and the protection never fires",

@@ -76,7 +76,7 @@ Real findings from 8 real boiler-house projects (CODESYS 3.5 SP17, scores 62–8
 Plus hygiene: magic numbers, dead POUs, bloated routines, missing comments,
 naming-standard profiles, device/IO-mapping summary.
 
-**All 47 rules, with what each one reads and how to fix it: [RULES.md](RULES.md).**
+**All 48 rules, with what each one reads and how to fix it: [RULES.md](RULES.md).**
 A known-bad project you can upload yourself, with every expected finding listed:
 [examples/](examples/).
 
@@ -102,7 +102,7 @@ python cli.py p.xml --fail-on high       # exit code 1 if there are high-severit
 python cli.py p.xml --profile heating    # optional rule profiles: heating, plcopen-naming
 ```
 
-The report is identical to the hosted one — same 47 rules, same engine file. What the
+The report is identical to the hosted one — same 48 rules, same engine file. What the
 hosted version adds: sharing a link, history across builds, diffs between two exports,
 the acceptance protocol and the signed certificate. What only the local version does:
 `.export` — the same rules plus the five device-and-visualisation checks above. A 30 MB
@@ -154,7 +154,7 @@ Without GitHub, the exit code does the same job anywhere:
 
 | | |
 |---|---|
-| `engine.py` | the analyzer: parser + all 47 rules |
+| `engine.py` | the analyzer: parser + all 48 rules |
 | `i18n.py` | rule titles, explanations and fixes (EN/RU) |
 | `cli.py` | local runner: console + HTML + JSON |
 | `action.yml` | GitHub Action: the same analysis inside a CI pipeline |

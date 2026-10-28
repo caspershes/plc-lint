@@ -1,11 +1,11 @@
 # PLC Lint — rule reference
 
-**47 checks.** Each entry says what it reads and how to fix it. Run them on your own export at [plc-linter.com](https://plc-linter.com) — or on the [example project](examples/).
+**48 checks.** Each entry says what it reads and how to fix it. Run them on your own export at [plc-linter.com](https://plc-linter.com) — or on the [example project](examples/).
 
 Severity: 🔴 high · 🟠 medium · ⚪ low.
 
 
-## 🔴 High (22)
+## 🔴 High (23)
 
 ### `always-false-condition` — Condition can never be true
 **Reads:** A condition that becomes identically false (or identically true) once same-scan assignments are substituted. The classic shape: one program derives a command from a sensor, another checks the alarm “command present but sensor absent” — substitution turns it into `NOT X AND X`, i.e. FALSE for any X. The alarm physically cannot fire: it is listed in the log, but there is no protection. The eye does not catch it because the assignment and the check live in different POUs, with the PLC_PRG call order between them. The rule substitutes only what is known for certain within the scan: the assignment must cover every execution path, and the source program must be called earlier. If a variable is assigned in several branches, every value is substituted and the rule fires only when the result is constant for all of them.
@@ -56,12 +56,26 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 - Remove the division by 0 — probably a typo in the divisor.
 - If the divisor can be zero dynamically — guard it: `IF d <> 0 THEN r := x / d; END_IF`
 
+### `edge-lost-in-own-branch` — Edge detector loses every edge but the first
+**Reads:** An edge detector compares its input with what it saw at its previous call. If it is only called inside a branch whose condition requires that same input, it never witnesses the input going down: at that moment the branch does not execute. Its internal memory stays latched, and every later rise no longer counts as an edge. Measured on a scan emulator: ten input transitions produced one pulse, nine were lost. The trap is that the FIRST edge works normally, so a quick check on site — press it, it fires — shows nothing; the defect appears from the second time on.
+
+**Fix:**
+- Call the detector unconditionally and pass the condition to its input: `r(CLK := v);` outside the branch, and keep only the actions on `r.Q` inside.
+- Test it twice in a row on site: the first pulse always works, the defect shows from the second.
+
 ### `family-gap` — Channel never written — gap in a channel family
 **Reads:** A field is declared for every channel in a family (boilers 1–4, pumps 1–3) and used by all of them but exactly one, where it is never written. The usual cause: the block was copied from a neighbouring channel and left unfinished. The compiler stays silent — the variable exists and the type is right, nobody just writes to it. On site this shows up as “boiler 4 never reports alarms” while the other three work, and it never reproduces on the bench. The rule relies on declarations: if the field is not declared for that channel, it is different hardware rather than a gap, and nothing is reported.
 
 **Fix:**
 - Check that channel's block: an assignment was most likely copied from the neighbour and kept its indexes — `gvl.kotel_3_alarms3 := ...` instead of `gvl.kotel_4_alarms3 := ...`.
 - If the field genuinely does not apply to that channel (no such hardware), drop its declaration — the rule goes quiet and the GVL loses a dead variable.
+
+### `fb-call-overwritten` — A second call to the instance overwrites the first
+**Reads:** A stateful FB instance — a timer or an edge detector — holds a single state. Two calls in a row within the same branch with different inputs mean only the last one reaches the timer: the first call cannot affect anything, although it looks live in the code. Calls in MUTUALLY EXCLUSIVE branches are a legitimate pattern — start the timer in one branch, reset it via `IN := FALSE` in the other. That pattern occurs seven times in our corpus and the rule leaves it alone; it only fires when both calls sit on the same path and run in the same scan.
+
+**Fix:**
+- Keep a single call and make the input an expression: `t(IN := a AND NOT b, PT := …);`.
+- If a reset is needed, put the calls in mutually exclusive branches so exactly one runs per scan.
 
 ### `heating-ai-no-range-check` — Analog input without a plausibility check
 **Reads:** A value coming from an analog input (or a raw register) is never compared against a range anywhere in the project. On a broken or shorted sensor the input returns an extreme value and it travels into the controller as valid data: a broken Pt1000 reads as 0 °C and the valve opens fully. Inputs are taken from the device tree (nothing assigns them in code — the runtime does). A check means either a range comparison anywhere in the project or a read of the module's own channel error code (`error_analog_code` and the like) — the latter is in fact stronger: a broken or shorted sensor is caught by the hardware. If plausibility is handled in a way static analysis cannot see (the HMI), verify before treating this as a defect.
@@ -105,13 +119,6 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 **Fix:**
 - Feed the STATE output into the command instead of a permission output that contains the input itself: `NOT bProtBlocked1` rather than `bStartAllow`. The protection keeps working — the start-count lockout is unaffected.
 - Check what is wired to the block input: the start command and the running feedback are different signals, and swapping one for the other only shows up on site.
-
-### `timer-call-overwritten` — A second call to the timer overwrites the first
-**Reads:** A timer instance holds a single state. Two calls in a row within the same branch with different inputs mean only the last one reaches the timer: the first call cannot affect anything, although it looks live in the code. Calls in MUTUALLY EXCLUSIVE branches are a legitimate pattern — start the timer in one branch, reset it via `IN := FALSE` in the other. That pattern occurs seven times in our corpus and the rule leaves it alone; it only fires when both calls sit on the same path and run in the same scan.
-
-**Fix:**
-- Keep a single call and make the input an expression: `t(IN := a AND NOT b, PT := …);`.
-- If a reset is needed, put the calls in mutually exclusive branches so exactly one runs per scan.
 
 ### `timer-off-delay-in-own-branch` — Off-delay is not called when it should be counting
 **Reads:** An off-delay counts while its input is DOWN: drop the command, the delay runs, the output goes off after the setpoint. If the timer is only called inside a branch whose condition requires that same input, then at the moment the command is dropped the branch does not execute, there is no call, and the accumulated time stays at zero. The delay never ends and the equipment never stops. For an on-delay the same code is correct — it is meant to count while the condition holds — so the rule looks only at TOF and TONOF. Found by enumerating combinations and confirmed with a scan emulator: the accumulated time stayed at zero under every input behaviour tried.

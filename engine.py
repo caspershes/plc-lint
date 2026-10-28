@@ -1339,7 +1339,7 @@ def bool_const(f):
 
 # ---------- таймер сбрасывается собственным условием отсчёта ----------
 _TR_CALL = re.compile(r"\b([A-Za-z_]\w*)\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)", re.S)
-_TR_IN = re.compile(r"\bIN\s*:=\s*([^,)]+)", re.I | re.S)
+_TR_IN = re.compile(r"\b(?:IN|CLK)\s*:=\s*([^,)]+)", re.I | re.S)
 _TR_SIMPLE = re.compile(r"^[A-Za-z_][\w.]*(?:\[[^\]]*\])?$")
 _TR_KNOWN = ("TON", "TOF", "TP", "TONOF", "BLINK")
 
@@ -1513,11 +1513,16 @@ def _tm_implies(cond, var):
     return True
 
 
-def _tm_instances(d):
-    """Экземпляры таймеров POU: имя → тип."""
+_EDGES = ("R_TRIG", "F_TRIG")
+_STATEFUL = _TR_KNOWN + _EDGES
+
+
+def _tm_instances(d, kinds=None):
+    """Экземпляры ФБ с памятью: имя → тип."""
+    kinds = kinds or _TR_KNOWN
     return {n.lower(): (t or "").upper()
             for n, t in _iface_names(d.get("iface"), "localVars").items()
-            if (t or "").upper() in _TR_KNOWN}
+            if (t or "").upper() in kinds}
 
 
 def heur_timer_off_delay_branch(pous):
@@ -1544,8 +1549,8 @@ def heur_timer_off_delay_branch(pous):
     return hits
 
 
-def heur_timer_call_overwritten(pous):
-    """Два вызова одного экземпляра подряд в одной ветви с разными IN.
+def heur_fb_call_overwritten(pous):
+    """Два вызова одного экземпляра подряд в одной ветви с разными входами.
 
     Второй вызов перетирает первый в том же скане: до таймера доходит только
     последнее значение входа. Вызовы во ВЗАИМОИСКЛЮЧАЮЩИХ ветвях — приём
@@ -1554,7 +1559,7 @@ def heur_timer_call_overwritten(pous):
     hits = []
     for name, d in pous.items():
         tree = st_blocks(d["body"] or "")
-        for inst in _tm_instances(d):
+        for inst in _tm_instances(d, _STATEFUL):
             sites = []
             _tm_sites(tree, inst, [], sites)
             with_in = [s for s in sites if s["in"]]
@@ -1563,6 +1568,28 @@ def heur_timer_call_overwritten(pous):
                 if a["items"] is b["items"] and st_key(a["in"]) != st_key(b["in"]):
                     hits.append((name, b["line"], inst, a["in"], b["in"], a["line"], b["text"]))
                     break
+    return hits
+
+
+def heur_edge_lost_in_own_branch(pous):
+    """R_TRIG/F_TRIG вызывают только внутри ветви, требующей его же вход.
+
+    Детектор сравнивает вход с тем, что видел в ПРОШЛЫЙ раз. Если его вызывают
+    только там, где вход поднят, то снятия входа он не видит вовсе: внутренняя
+    память остаётся взведённой, и каждый следующий подъём фронтом уже не
+    считается. Замер на эмуляторе: десять переходов входа — одно срабатывание,
+    девять потеряны. Первый фронт при этом проходит, поэтому при беглой проверке
+    на объекте всё выглядит рабочим."""
+    hits = []
+    for name, d in pous.items():
+        tree = st_blocks(d["body"] or "")
+        for inst, typ in _tm_instances(d, _EDGES).items():
+            sites = []
+            _tm_sites(tree, inst, [], sites)
+            if not sites:
+                continue
+            if all(s["in"] and any(_tm_implies(c, s["in"]) for c in s["conds"]) for s in sites):
+                hits.append((name, sites[0]["line"], inst, typ, sites[0]["in"], sites[0]["text"]))
     return hits
 
 
@@ -2783,7 +2810,8 @@ RULES = {
     "timer-reset-by-own-condition": ("high", "Таймер гасит собственное условие отсчёта"),
     "timer-rearmed-by-own-branch": ("high", "Задержка выключения не истекает никогда"),
     "timer-off-delay-in-own-branch": ("high", "Выдержку выключения не вызывают, когда она должна считать"),
-    "timer-call-overwritten": ("high", "Второй вызов таймера перетирает первый"),
+    "fb-call-overwritten": ("high", "Второй вызов экземпляра перетирает первый"),
+    "edge-lost-in-own-branch": ("high", "Детектор фронта теряет все фронты, кроме первого"),
     "timer-preset-missing": ("high", "У таймера нигде не задана уставка"),
     "always-false-condition": ("high", "Условие не выполнится ни при каких значениях"),
     "signal-without-source": ("medium", "Аварию никто не формирует"),
@@ -3033,11 +3061,17 @@ def analyze(src, profiles=None, lang="ru", extra_refs=None) -> Report:
             title=T("timer-off-delay-in-own-branch"), pou=nm, line=i, code=ln,
             detail=D("timer-off-delay-in-own-branch", timer=timer, var=var)))
 
-    for nm, i, timer, v1, v2, l1, ln in heur_timer_call_overwritten(pous):
+    for nm, i, timer, v1, v2, l1, ln in heur_fb_call_overwritten(pous):
         findings.append(Finding(
-            rule="timer-call-overwritten", severity=_sev("timer-call-overwritten"),
-            title=T("timer-call-overwritten"), pou=nm, line=i, code=ln,
-            detail=D("timer-call-overwritten", timer=timer, first=v1, second=v2, fl=l1)))
+            rule="fb-call-overwritten", severity=_sev("fb-call-overwritten"),
+            title=T("fb-call-overwritten"), pou=nm, line=i, code=ln,
+            detail=D("fb-call-overwritten", timer=timer, first=v1, second=v2, fl=l1)))
+
+    for nm, i, inst, typ, var, ln in heur_edge_lost_in_own_branch(pous):
+        findings.append(Finding(
+            rule="edge-lost-in-own-branch", severity=_sev("edge-lost-in-own-branch"),
+            title=T("edge-lost-in-own-branch"), pou=nm, line=i, code=ln,
+            detail=D("edge-lost-in-own-branch", edge=inst, type=typ, var=var)))
 
     for nm, i, timer, typ, ln in heur_timer_preset_missing(pous):
         findings.append(Finding(
