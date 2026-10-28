@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Эмулятор скана: таймеры и детекторы фронта.
+"""Эмулятор скана: таймеры, детекторы фронта и счётчики.
 
 Зачем. Спорить о том, дефект клетка или норма, можно бесконечно. Эмулятор
 отвечает замером: подаём команду, крутим сканы и смотрим, через сколько
@@ -24,7 +24,7 @@ import engine  # noqa: E402
 
 _TIME = re.compile(r"T#(?:(\d+)H)?(?:(\d+)M(?!S))?(?:(\d+)S)?(?:(\d+)MS)?", re.I)
 _CALL = re.compile(r"^\s*([A-Za-z_]\w*)\s*\((.*)\)\s*;?\s*$", re.S)
-_ARG = re.compile(r"\b(IN|PT|CLK)\s*:=\s*([^,]+?)(?=\s*,\s*\w+\s*:=|\s*$)", re.I | re.S)
+_ARG = re.compile(r"\b(IN|PT|CLK|CU|CD|RESET|LOAD|PV)\s*:=\s*([^,]+?)(?=\s*,\s*\w+\s*:=|\s*$)", re.I | re.S)
 
 
 def ms_of(lit):
@@ -37,6 +37,7 @@ def ms_of(lit):
 
 
 EDGES = ("R_TRIG", "F_TRIG")
+COUNTERS = ("CTU", "CTD", "CTUD")
 
 
 class Timer:
@@ -51,6 +52,8 @@ class Timer:
         self.kind, self.pt, self.et, self.q, self.prev, self.run = kind, 0, 0, False, False, False
         self.armed = False          # вход хоть раз поднимался — иначе клетку нечем судить
         self.pulses = 0             # сколько раз выход фронта поднимался
+        self.unit = "шт" if kind in COUNTERS else "мс"
+        self.prev_cd = False
         self.calls = 0              # сколько раз экземпляр вообще вызвали
 
     def call(self, in_, dt):
@@ -69,6 +72,8 @@ class Timer:
                 self.et += dt
                 if self.et >= self.pt:
                     self.q = False
+        elif self.kind in COUNTERS:
+            pass                      # счётчики считаются в count(), у них свои входы
         elif self.kind == "R_TRIG":
             self.q = in_ and not self.prev
             self.pulses += self.q
@@ -83,6 +88,27 @@ class Timer:
                 if self.et >= self.pt:
                     self.run, self.q = False, False
         self.prev = in_
+
+
+def _counter(t, cu, cd, reset, load):
+    """Шаг счётчика по МЭК: вход CU/CD считает ПО ФРОНТУ (это делает сам ФБ),
+    сброс и загрузка имеют приоритет над счётом.
+
+    Накопленное держим в t.et, цель в t.pt — той же парой, что у таймера:
+    мерка одна («дошло ли до цели»), и вердикт считается одинаково."""
+    if t.kind in ("CTU", "CTUD") and reset:
+        t.et = 0
+    elif t.kind == "CTD" and load:
+        t.et = t.pt
+    else:
+        if t.kind in ("CTU", "CTUD") and cu and not t.prev:
+            t.et += 1
+        if t.kind in ("CTD", "CTUD") and cd and not t.prev_cd:
+            t.et -= 1
+    t.prev, t.prev_cd = cu, cd
+    t.armed = t.armed or cu or cd
+    t.q = t.et >= t.pt if t.kind != "CTD" else t.et <= 0
+    t.calls += 1
 
 
 class Scan:
@@ -125,9 +151,19 @@ class Scan:
         if m and m.group(1).lower() in self.t:
             inst, args = m.group(1).lower(), m.group(2)
             kw = {k.upper(): v.strip() for k, v in _ARG.findall(args)}
+            t = self.t[inst]
             if "PT" in kw:
                 ms = ms_of(kw["PT"])
-                self.t[inst].pt = ms if ms is not None else self.v.get(kw["PT"].lower(), 0)
+                t.pt = ms if ms is not None else self.v.get(kw["PT"].lower(), 0)
+            if "PV" in kw:
+                t.pt = int(kw["PV"]) if kw["PV"].strip().isdigit() else t.pt
+            if t.kind in COUNTERS:
+                _counter(t,
+                         self.val(kw["CU"]) if "CU" in kw else False,
+                         self.val(kw["CD"]) if "CD" in kw else False,
+                         self.val(kw["RESET"]) if "RESET" in kw else False,
+                         self.val(kw["LOAD"]) if "LOAD" in kw else False)
+                return
             # вызов без входа (отдельная строка только с уставкой) входа не трогает;
             # у детекторов фронта вход называется CLK, у таймеров — IN
             src = kw.get("IN") or kw.get("CLK")
@@ -275,7 +311,7 @@ def trace(code, timers, pulse=(), scans=6000, dt=10, drive=True):
     return stat
 
 
-def verdict(st, dt=10):
+def verdict(st, dt=10, unit="мс"):
     """Словами: что стало с накопленным временем."""
     if not st["pt"]:
         return "уставка не задана — выдержки нет"
@@ -284,8 +320,8 @@ def verdict(st, dt=10):
     if st["reached"]:
         return "время идёт, выдержка отрабатывает"
     if st["et_max"] <= dt:
-        return f"СБРАСЫВАЕТСЯ каждый скан: ET не поднялся выше {st['et_max']} мс"
-    return (f"время идёт, но до уставки не доходит: максимум {st['et_max']} из {st['pt']} мс"
+        return f"НЕ НАКАПЛИВАЕТСЯ: не поднялось выше {st['et_max']} {unit}"
+    return (f"идёт, но до цели не доходит: максимум {st['et_max']} из {st['pt']} {unit}"
             f", сбросов {st['resets']}")
 
 

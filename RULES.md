@@ -56,11 +56,11 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 - Remove the division by 0 — probably a typo in the divisor.
 - If the divisor can be zero dynamically — guard it: `IF d <> 0 THEN r := x / d; END_IF`
 
-### `edge-lost-in-own-branch` — Edge detector loses every edge but the first
-**Reads:** An edge detector compares its input with what it saw at its previous call. If it is only called inside a branch whose condition requires that same input, it never witnesses the input going down: at that moment the branch does not execute. Its internal memory stays latched, and every later rise no longer counts as an edge. Measured on a scan emulator: ten input transitions produced one pulse, nine were lost. The trap is that the FIRST edge works normally, so a quick check on site — press it, it fires — shows nothing; the defect appears from the second time on.
+### `edge-lost-in-own-branch` — An edge-sensitive input never sees the drop — only the first event counts
+**Reads:** An edge input — on R_TRIG, F_TRIG and on the counting input of CTU/CTUD — is compared with what the FB saw at its previous call. If it is only called inside a branch whose condition requires that same input, it never witnesses the input going down: at that moment the branch does not execute. Its internal memory stays latched, and every later rise no longer counts as an edge. Measured on a scan emulator: a detector produced one pulse out of ten transitions, and a CTU counted 1 against a preset of 5. The trap is that the FIRST edge works normally, so a quick check on site — press it, it fires — shows nothing; the defect appears from the second time on.
 
 **Fix:**
-- Call the detector unconditionally and pass the condition to its input: `r(CLK := v);` outside the branch, and keep only the actions on `r.Q` inside.
+- Call the FB unconditionally and pass the condition to its input: `r(CLK := v);` outside the branch, and keep only the actions on `r.Q` inside.
 - Test it twice in a row on site: the first pulse always works, the defect shows from the second.
 
 ### `family-gap` — Channel never written — gap in a channel family
@@ -76,6 +76,13 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 **Fix:**
 - Keep a single call and make the input an expression: `t(IN := a AND NOT b, PT := …);`.
 - If a reset is needed, put the calls in mutually exclusive branches so exactly one runs per scan.
+
+### `fb-preset-missing` — The instance has no preset anywhere
+**Reads:** A preset — PT on a timer, PV on a counter — can be set in three ways: as a call argument, by assigning the field `t.PT := …`, or as an initial value in the declaration. If it is set nowhere, PT stays at zero and the output appears in the same scan in which the input went up. The code looks right: the call is there, the output is read, the delay is not. It differs from `timer-zero-pt` in that there the zero is written explicitly, while here the preset is simply missing — which is harder to spot by eye.
+
+**Fix:**
+- Set the preset in the call: `t(IN := v, PT := T#5S);` so it is visible next to the run condition.
+- If the preset comes from the HMI, assign the field before the call and make sure the variable is not left at zero on first start.
 
 ### `heating-ai-no-range-check` — Analog input without a plausibility check
 **Reads:** A value coming from an analog input (or a raw register) is never compared against a range anywhere in the project. On a broken or shorted sensor the input returns an extreme value and it travels into the controller as valid data: a broken Pt1000 reads as 0 °C and the valve opens fully. Inputs are taken from the device tree (nothing assigns them in code — the runtime does). A check means either a range comparison anywhere in the project or a read of the module's own channel error code (`error_analog_code` and the like) — the latter is in fact stronger: a broken or shorted sensor is caught by the hardware. If plausibility is handled in a way static analysis cannot see (the HMI), verify before treating this as a defect.
@@ -126,13 +133,6 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 **Fix:**
 - Call the timer unconditionally and pass the condition to its input: put `t(IN := v, PT := …);` outside the branch and keep the branch for the actions.
 - Test the stop, not the start: starting works correctly in this code, and the defect only shows at shutdown.
-
-### `timer-preset-missing` — The timer has no preset anywhere
-**Reads:** A timer preset can be set in three ways: as a call argument, by assigning the field `t.PT := …`, or as an initial value in the declaration. If it is set nowhere, PT stays at zero and the output appears in the same scan in which the input went up. The code looks right: the call is there, the output is read, the delay is not. It differs from `timer-zero-pt` in that there the zero is written explicitly, while here the preset is simply missing — which is harder to spot by eye.
-
-**Fix:**
-- Set the preset in the call: `t(IN := v, PT := T#5S);` so it is visible next to the run condition.
-- If the preset comes from the HMI, assign the field before the call and make sure the variable is not left at zero on first start.
 
 ### `timer-rearmed-by-own-branch` — Off-delay never expires
 **Reads:** The mirror case of the previous rule, and worse in its consequences. An off-delay (TOF) counts while its input stays FALSE: drop the command, the delay runs, the output goes off after the setpoint. If the input is re-armed to TRUE on every path further down the same branch, the count restarts every scan, the output never goes off, and the equipment never stops: the pump keeps coasting, the purge never ends, the fan stays on. An on-delay defect takes the delay away; this one takes the shutdown away. The rule tells the types apart: for TON the defect is clearing the input, for TOF re-arming it, and TP and BLINK are left alone entirely, because there the input acts as an edge and has nothing to do with the delay.

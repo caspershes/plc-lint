@@ -5,7 +5,8 @@
 скана (tools/scan_emu.py), и его замер решает, дефект это или норма:
   * таймер — дошло ли накопленное время до уставки хоть при каком-то
     поведении входов;
-  * детектор фронта — сработал ли он на каждый переход входа.
+  * детектор фронта — сработал ли он на каждый переход входа;
+  * счётчик — дошло ли накопленное до уставки и не насчитал ли он лишнего.
 Движок обязан совпасть: сказал эмулятор «сломано» — должна быть находка,
 сказал «работает» — находок быть не должно.
 
@@ -54,9 +55,9 @@ XML = """<?xml version="1.0" encoding="utf-8"?>
 </pou></pous></types><instances><configurations/></instances></project>"""
 
 
-def engine_finds(kind, code):
+def engine_finds(kind, code, inst="t"):
     with tempfile.NamedTemporaryFile("w", suffix=".xml", delete=False, encoding="utf-8") as fh:
-        fh.write(XML % (kind, sx.escape(code)))
+        fh.write(XML.replace('name="t"', f'name="{inst}"') % (kind, sx.escape(code)))
         path = fh.name
     try:
         rep = engine.analyze(path)
@@ -109,6 +110,40 @@ EDGE_ROWS = {
 }
 
 
+COUNTER_ROWS = {
+    "вызов безусловный": "c(CU := a, RESET := b, PV := 5);\nout := c.Q;",
+    "сброс собственным выходом": "c(CU := a, RESET := c.Q, PV := 5);\nout := c.Q;",
+    "уставка PV не задана": "c(CU := a, RESET := b);\nout := c.Q;",
+    "вызов в ветви счётного входа": ("IF a THEN\n    c(CU := a, RESET := b, PV := 5);\n"
+                                     "    out := c.Q;\nEND_IF"),
+    "два вызова с разными входами": ("c(CU := a, RESET := b, PV := 5);\nout := c.Q;\n"
+                                     "c(CU := b, PV := 5);"),
+}
+
+
+def counter_broken(code, kind, scans=400, period=20):
+    """Считает ли счётчик ровно столько, сколько было фронтов, и доходит ли до цели."""
+    s = scan_emu.Scan(code, {"c": kind})
+    cv_max = edges = total = 0
+    prev = False
+    for n in range(scans):
+        cur = (n // period) % 2 == 1
+        s.v["a"], s.v["b"] = cur, False
+        before = s.t["c"].et
+        s.scan()
+        if cur and not prev:
+            edges += 1
+        total += max(0, s.t["c"].et - before)
+        cv_max = max(cv_max, s.t["c"].et)
+        prev = cur
+    pv = s.t["c"].pt
+    if not pv:
+        return True, "уставка не задана"
+    if total > edges:
+        return True, f"насчитал {total} при {edges} фронтах"
+    return cv_max < pv, f"{cv_max} из {pv}"
+
+
 def edge_broken(code, kind, scans=400, period=20):
     """Срабатывает ли детектор на каждый переход входа."""
     s = scan_emu.Scan(code, {"t": kind})
@@ -143,6 +178,14 @@ for row, code in EDGE_ROWS.items():
         check(bool(found) == broken,
               f"{row} / {kind}: эмулятор — {'сломано' if broken else 'работает'}"
               f" ({score}), движок — {found or 'молчит'}")
+
+print("счётчики: замер против движка")
+for row, code in COUNTER_ROWS.items():
+    broken, score = counter_broken(code, "CTU")
+    found = engine_finds("CTU", code, inst="c")
+    check(bool(found) == broken,
+          f"{row} / CTU: эмулятор — {'сломано' if broken else 'работает'}"
+          f" ({score}), движок — {found or 'молчит'}")
 
 print()
 print("SCAN MATRIX OK" if not fail else f"SCAN MATRIX: расхождений {fail}")
