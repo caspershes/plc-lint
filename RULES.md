@@ -145,7 +145,8 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 **Reads:** A timer counts on a variable that is cleared on every path further down the same branch. Scan N: the input is TRUE, counting starts, the variable is dropped. Scan N+1: the input is already FALSE, the timer is reset together with the accumulated time, and the condition that was waiting for the delay is open. The pause lasts one task cycle instead of the setpoint — on a live site that was 0.01 s against the 30 s configured. The code compiles, reads as correct, the setpoint is on the screen, the operator adjusts it, and it changes nothing. The rule looks at the branch tree, not at adjacent lines: a reset under a condition (`IF T.Q THEN V := FALSE`) is the normal one-shot pattern, the timer does complete its delay, and such code is left alone.
 
 **Fix:**
-- Separate “what we time” from “what we clear”: arm the timer from a dedicated hold flag (`switching`) that is set when the switchover starts and cleared on `T.Q`, and feed the run condition from that flag.
+- Take the timer input from OUTSIDE the branch the timer gates: `pause(IN := run_both, PT := …); run_2 := pause.Q;`. The branch then cannot clear the timer's own count even by accident — and usually the whole IF turns out to be unnecessary.
+- If there is no external signal, separate “what we time” from “what we clear”: arm the timer from a dedicated hold flag (`switching`) that is set when the switchover starts and cleared on `T.Q`, and feed the run condition from that flag.
 - Verify the delay on site by measurement, not by reading the code: a pause like this expires in one task cycle, and on the screen it looks like an instant switchover at any setpoint.
 
 ### `uncalled-timer` — Uncalled timer/trigger
