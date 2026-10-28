@@ -1324,6 +1324,55 @@ def bool_eval(f, env):
     return r
 
 
+def bool_subst(f, consts):
+    """Подставляет известные константы в формулу: {имя атома: True/False}."""
+    k = f[0]
+    if k == "atom":
+        v = consts.get(f[1])
+        return ("const", v) if v is not None else f
+    if k == "not":
+        return ("not", bool_subst(f[1], consts))
+    if k in ("and", "or", "xor"):
+        return (k, [bool_subst(s, consts) for s in f[1]])
+    return f
+
+
+def bool_simplify(f):
+    """Схлопывает константы: `x OR FALSE` → `x`, `x AND FALSE` → FALSE."""
+    k = f[0]
+    if k == "not":
+        inner = bool_simplify(f[1])
+        return ("const", not inner[1]) if inner[0] == "const" else ("not", inner)
+    if k in ("and", "or"):
+        kill, drop = (False, True) if k == "and" else (True, False)
+        parts = []
+        for s in (bool_simplify(x) for x in f[1]):
+            if s[0] == "const":
+                if s[1] is kill:
+                    return ("const", kill)
+                continue            # нейтральный элемент выбрасываем
+            parts.append(s)
+        if not parts:
+            return ("const", drop)
+        return parts[0] if len(parts) == 1 else (k, parts)
+    return f
+
+
+def bool_text(f):
+    """Формула обратно в текст — для сообщения находки."""
+    k = f[0]
+    if k == "const":
+        return "TRUE" if f[1] else "FALSE"
+    if k == "atom":
+        return f[1]
+    if k == "not":
+        inner = bool_text(f[1])
+        return f"NOT {inner}" if f[1][0] in ("atom", "const") else f"NOT ({inner})"
+    joiner = f" {k.upper()} "
+    return joiner.join(bool_text(s) if s[0] in ("atom", "const", "not")
+                       else f"({bool_text(s)})" for s in f[1])
+
+
 def bool_const(f):
     """True/False, если формула тождественна константе, иначе None."""
     names = sorted(bool_atoms(f))
@@ -1420,6 +1469,44 @@ def _tr_rearmed(items, start, inst, var):
     return False
 
 
+_TR_ZERO_PT = re.compile(r"T#0+(?:MS|S|M|H)?\b", re.I)
+
+
+def _tr_preset_positive(body, inst):
+    """Есть ли у экземпляра НЕнулевая уставка. При нулевой выход истинен сразу,
+    и рассуждение «Q тождественно ложен» неверно."""
+    for m in _TR_CALL.finditer(body):
+        if m.group(1).lower() != inst.lower():
+            continue
+        a = re.search(r"\bPT\s*:=\s*([^,)]+)", m.group(2), re.I)
+        if a and not _TR_ZERO_PT.fullmatch(a.group(1).strip()):
+            return True
+    a = re.search(rf"\b{re.escape(inst)}\s*\.\s*PT\s*:=\s*([^;]+)", body, re.I)
+    return bool(a) and not _TR_ZERO_PT.fullmatch(a.group(1).strip())
+
+
+def _tr_reduced(items, start, inst):
+    """Первое условие ниже по ветви, где участвует `inst.Q`, и во что оно
+    превращается, если `Q` тождественно ложен. → (исходное, свёрнутое) или None.
+
+    Замечание с форума: при положительной уставке такой таймер не просто
+    отсчитывает мало — его выход мёртв, и условие равносильно записи вообще
+    без таймера. Показать это нагляднее, чем говорить «пауза короче уставки»."""
+    q = f"{inst.lower()}.q"
+    for it in items[start:]:
+        conds = ([b["cond"] for b in it["branches"] if not b["is_else"]]
+                 if it["kind"] == "if" else [])
+        for cond in conds:
+            f = bool_parse(cond)
+            if f is None or q not in {a.lower() for a in bool_atoms(f)}:
+                continue
+            red = bool_simplify(bool_subst(f, {a: False for a in bool_atoms(f)
+                                               if a.lower() == q}))
+            text = re.sub(r"\s+", " ", cond).strip()
+            return text, bool_text(red)
+    return None
+
+
 def _tr_scan(pou, items, timers, hits):
     for i, it in enumerate(items):
         if it["kind"] == "stmt":
@@ -1429,8 +1516,10 @@ def _tr_scan(pou, items, timers, hits):
                     # 'on' — губит гашение входа (TON), 'off' — повторное взведение (TOF)
                     rl = _tr_forced(items, got[1], kind == "off", i + 1)
                     if rl:
+                        red = _tr_reduced(items, i, got[0]) if kind == "on" else None
                         hits.append((pou, it["line"], got[0], got[1], rl,
-                                     re.sub(r"\s+", " ", it["text"]).strip()[:110], kind))
+                                     re.sub(r"\s+", " ", it["text"]).strip()[:110],
+                                     kind, red))
                         break
         elif it["kind"] == "if":
             for b in it["branches"]:
@@ -1746,7 +1835,21 @@ def _af_walk(pou, items, defs, locals_, hits):
                 cur.pop(k, None)
 
 
-def heur_always_false(pous, decl):
+def dead_timer_q(pous):
+    """Экземпляры, чей `.Q` тождественно ложен: вход гасят на всех путях, а
+    уставка положительна. → {POU: {ключ атома: (имя, строка)}}.
+
+    Нужно булеву решателю: мёртвый выход делает константой не только своё
+    условие, но и соседние, где он участвует сомножителем."""
+    out = {}
+    for pou, i, inst, _var, _rl, _ln, kind, _red in heur_timer_reset(pous):
+        if kind != "on" or not _tr_preset_positive(blank_comments(pous[pou]["body"] or ""), inst):
+            continue
+        out.setdefault(pou, {})[st_key(f"{inst}.Q")] = (inst, i)
+    return out
+
+
+def heur_always_false(pous, decl, dead=None):
     """Условие, которое после подстановки присваиваний этого же скана тождественно
     ложно (или истинно).
 
@@ -1766,7 +1869,12 @@ def heur_always_false(pous, decl):
         locals_ = set()
         for tag in ("localVars", "inputVars", "outputVars", "inOutVars", "tempVars"):
             locals_ |= {k.lower() for k in _iface_names(pous[pou].get("iface"), tag)}
-        _af_walk(pou, trees[pou], dict(gdefs), locals_, hits)
+        start = dict(gdefs)
+        # Мёртвый выход таймера — такой же известный факт этого скана, как
+        # присваивание константы, и подставляется наравне с ними.
+        for key, (_inst, ln) in ((dead or {}).get(pou) or {}).items():
+            start[key] = ([("FALSE", ln)], pou, 1, {})
+        _af_walk(pou, trees[pou], start, locals_, hits)
         final = st_defs(trees[pou])
         loc_snap = {k: (v, pou, 1, {}) for k, v in final.items() if k in locals_}
         for k, v in final.items():
@@ -3050,15 +3158,20 @@ def analyze(src, profiles=None, lang="ru", extra_refs=None) -> Report:
             pou=nm, line=i, code=ln,
             detail=D("self-enable", cmd=cmd, fb=ftype, out=oname, inp=inp, sig=sig)))
 
-    for nm, i, timer, var, rl, ln, kind in heur_timer_reset(pous):
+    for nm, i, timer, var, rl, ln, kind, red in heur_timer_reset(pous):
         # Два зеркальных дефекта одной природы, но последствия разные: у задержки
         # включения выдержка не наступает, у задержки выключения — не кончается,
         # поэтому и правила разные, с разным текстом и разной подсказкой к правке.
         rid = ("timer-rearmed-by-own-branch" if kind == "off"
                else "timer-reset-by-own-condition")
+        text = D(rid, timer=timer, var=var, rl=rl)
+        if red:
+            # Выход такого таймера мёртв, и условие равносильно записи без него —
+            # это нагляднее, чем «пауза короче уставки».
+            text += D("timer-reset.reduced", timer=timer, cond=red[0], to=red[1])
         findings.append(Finding(
             rule=rid, severity=_sev(rid), title=T(rid), pou=nm, line=i, code=ln,
-            detail=D(rid, timer=timer, var=var, rl=rl)))
+            detail=text))
 
     for nm, i, timer, var, ln in heur_timer_off_delay_branch(pous):
         findings.append(Finding(
@@ -3084,7 +3197,8 @@ def analyze(src, profiles=None, lang="ru", extra_refs=None) -> Report:
             title=T("fb-preset-missing"), pou=nm, line=i, code=ln,
             detail=D("fb-preset-missing", timer=timer, type=typ)))
 
-    for nm, i, kind, val, ln, chain in heur_always_false(pous, decl):
+    for nm, i, kind, val, ln, chain in heur_always_false(pous, decl,
+                                                        dead=dead_timer_q(pous)):
         # цепочка подстановки — главное в сообщении: без неё человек видит нормальное
         # условие и не понимает, почему оно «всегда ложно»
         steps = " → ".join(

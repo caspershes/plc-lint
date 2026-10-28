@@ -1791,7 +1791,8 @@ RULE_FIX = {
         "Проверьте, что подано на вход блока: команда на пуск и факт вращения — разные сигналы, и подмена одного другим ловится только на объекте.",
     ],
     "timer-reset-by-own-condition": [
-        "Разведите «что отсчитываем» и «что гасим»: завести таймер отдельным флагом удержания (`switching`), который ставится при входе в переключение и снимается по `T.Q`, а условие отсчёта подавать от этого флага.",
+        "Берите вход таймера СНАРУЖИ той ветви, которую таймер открывает: `pause(IN := run_both, PT := …); run_2 := pause.Q;`. Тогда ветвь физически не может погасить собственный отсчёт, и дефект нельзя выразить даже случайно — обычно при этом весь IF оказывается не нужен.",
+        "Если внешнего сигнала нет, разведите «что отсчитываем» и «что гасим»: завести таймер отдельным флагом удержания (`switching`), который ставится при входе в переключение и снимается по `T.Q`, а условие отсчёта подавать от этого флага.",
         "Проверьте уставку на объекте замером, а не чтением кода: такая пауза отрабатывает один цикл задачи, и на экране это выглядит как мгновенное переключение при любой уставке.",
     ],
     "timer-rearmed-by-own-branch": [
@@ -1977,7 +1978,8 @@ RULE_FIX = {
         "Check what is wired to the block input: the start command and the running feedback are different signals, and swapping one for the other only shows up on site.",
     ],
     "timer-reset-by-own-condition": [
-        "Separate “what we time” from “what we clear”: arm the timer from a dedicated hold flag (`switching`) that is set when the switchover starts and cleared on `T.Q`, and feed the run condition from that flag.",
+        "Take the timer input from OUTSIDE the branch the timer gates: `pause(IN := run_both, PT := …); run_2 := pause.Q;`. The branch then cannot clear the timer's own count even by accident — and usually the whole IF turns out to be unnecessary.",
+        "If there is no external signal, separate “what we time” from “what we clear”: arm the timer from a dedicated hold flag (`switching`) that is set when the switchover starts and cleared on `T.Q`, and feed the run condition from that flag.",
         "Verify the delay on site by measurement, not by reading the code: a pause like this expires in one task cycle, and on the screen it looks like an instant switchover at any setpoint.",
     ],
     "timer-rearmed-by-own-branch": [
@@ -2297,6 +2299,7 @@ DETAIL = {
     "index-mismatch": "позиция {p1} и позиция {p2} совпадают в {eq} строках группы из {total}, а здесь различаются ({v1} против {v2}) — похоже, строку скопировали и перенумеровали не полностью",
     "self-enable": "разрешение на пуск `{cmd}` получено из `{fb}.{out}`, который в том же скане равен функции входа `{inp}`, а на этот вход подана обратная связь `{sig}` того же канала — команда не появится, пока оборудование не работает, а работать оно не начнёт без команды",
     "timer-reset-by-own-condition": "таймер `{timer}` отсчитывает по `{var}`, а `{var}` гасится в строке {rl} на всех путях этой же ветви — на следующем скане вход уже FALSE, накопленное время обнулено, и выдержка живёт один цикл задачи вместо уставки",
+    "timer-reset.reduced": ". При положительной уставке выход `{timer}.Q` тождественно ложен, поэтому условие `{cond}` равносильно `{to}` — таймер в этом коде ни на что не влияет",
     "timer-rearmed-by-own-branch": "таймер `{timer}` отсчитывает задержку выключения по `{var}`, а `{var}` снова взводится в строке {rl} на всех путях этой же ветви — отсчёт начинается заново на каждом скане, выдержка не истекает никогда, и команда с выхода не снимается",
     "timer-off-delay-in-own-branch": "таймер `{timer}` — задержка выключения, но все его вызовы лежат внутри ветви, требующей `{var}`: когда `{var}` снимут, вызова не будет, и выдержка не начнёт отсчитываться",
     "fb-call-overwritten": "экземпляр `{timer}` вызван дважды подряд: в строке {fl} со входом `{first}`, затем со входом `{second}` — до таймера дойдёт только второй, первый вызов не делает ничего",
@@ -2348,6 +2351,7 @@ DETAIL = {
     "index-mismatch": "positions {p1} and {p2} match in {eq} of {total} lines in this group but differ here ({v1} vs {v2}) — the line was likely copied and renumbered only partially",
     "self-enable": "the start permission `{cmd}` comes from `{fb}.{out}`, which within the same scan is a function of input `{inp}`, and that input is fed with the feedback `{sig}` of the same channel — the command never appears until the equipment runs, and it cannot start running without the command",
     "timer-reset-by-own-condition": "timer `{timer}` runs on `{var}`, and `{var}` is cleared at line {rl} on every path of the same branch — on the next scan the input is already FALSE, the accumulated time is gone, and the delay lasts one task cycle instead of the setpoint",
+    "timer-reset.reduced": ". With a positive preset the output `{timer}.Q` is identically false, so the condition `{cond}` is equivalent to `{to}` — the timer affects nothing here",
     "timer-rearmed-by-own-branch": "timer `{timer}` runs an off-delay on `{var}`, and `{var}` is re-armed at line {rl} on every path of the same branch — the count restarts every scan, the delay never expires, and the output is never released",
     "timer-off-delay-in-own-branch": "timer `{timer}` is an off-delay, yet every call to it sits inside a branch that requires `{var}`: once `{var}` is dropped there is no call at all, so the delay never starts counting",
     "fb-call-overwritten": "instance `{timer}` is called twice in a row: at line {fl} with input `{first}`, then with input `{second}` — only the second one reaches the timer, the first call does nothing",
