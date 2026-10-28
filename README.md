@@ -1,14 +1,14 @@
-# PLC Lint — static analysis for CODESYS / PLCopenXML
+# PLC Lint: static analysis for CODESYS / PLCopenXML
 
 **Drop a PLC project export on it, get a quality report in ~10 seconds.**
 
 Your project compiles clean and still ships with an uncalled timer, a truncated
 setpoint, or a divide-by-a-variable-that's-sometimes-zero. The compiler doesn't
-catch it — the syntax is valid. PLC Lint does.
+catch it, because the syntax is valid. PLC Lint does.
 
 👉 **Try it free (no signup): [plc-linter.com](https://plc-linter.com)** &nbsp;·&nbsp; **Run it locally: [plc-lint.exe](https://github.com/caspershes/plc-lint/releases/latest)** &nbsp;·&nbsp; **[Live sample report](https://plc-linter.com/demo)**
 
-This is the report on the known-bad project bundled in [`examples/`](examples/) — every
+This is the report on the known-bad project bundled in [`examples/`](examples/), and every
 finding on it is listed there, so you can check the tool against a known answer before
 you point it at anything of your own:
 
@@ -24,7 +24,7 @@ The same run in a terminal, if you prefer the console:
   CRITICAL (10)
     • CFC: division by a literal zero  [CfcDiv]
       the divisor of the DIV block is wired to a literal 0 → a guaranteed division by zero
-      → Wire a variable/setpoint into the divisor input instead of the literal 0 — usually
+      → Wire a variable/setpoint into the divisor input instead of the literal 0; usually
         a debug stub left behind.
 ```
 
@@ -52,45 +52,45 @@ A known-bad project you can upload yourself, with every expected finding listed:
 
 ## What it eats
 
-Any **PLCopenXML** export (`tc6_0200`, PLCopen TC6 — the vendor-neutral
+Any **PLCopenXML** export (`tc6_0200`, PLCopen TC6, the vendor-neutral
 IEC 61131-3 format):
 
 - **CODESYS 3.5** (`Project → Export PLCopenXML`)
-- **TwinCAT3** (Beckhoff — same engine, same namespace)
+- **TwinCAT3** (Beckhoff: same engine, same namespace)
 - **WAGO e!COCKPIT, Schneider EcoStruxure Machine Expert, OWEN, Weintek** and
   the 500+ environments built on the CODESYS 3.5 runtime
 
 And, locally, a **CODESYS ExportFile** (`.export`, `Project → Export`). That format carries
-what PLCopenXML leaves out — the device tree and the visualisation. Every program rule
+what PLCopenXML leaves out: the device tree and the visualisation. Every program rule
 works there too, plus five checks that no analyser does, because every analyser reads ST:
 
 | Finding | What it means on site |
 |---|---|
-| sensor type cleared on a wired channel | the channel is not digitised and the variable stays at zero — and for an outdoor sensor zero reads as a plausible 0 °C |
+| sensor type cleared on a wired channel | the channel is not digitised and the variable stays at zero, and for an outdoor sensor zero reads as a plausible 0 °C |
 | output bound, signal type not selected | the command goes nowhere, the actuator does not move |
 | module excluded from polling | a whole cabinet of signals is dead while the program keeps stale values |
 | one variable under two captions | a copied element kept its neighbour's binding: "pump 2" shows pump 1 |
 | caption number ≠ variable index | "Boiler 3" next to `alarm_kotel[2]` |
 
 The task configuration is laid out differently in an export, so the watchdog and
-duplicate-Modbus-address rules stay silent there — run the PLCopenXML export too if you
+duplicate-Modbus-address rules stay silent there, so run the PLCopenXML export too if you
 need those. How the format is parsed, and the three things that cost time:
 [docs/export-format.md](docs/export-format.md).
 
 ## Run it on your own machine
 
 Your customer's export is their intellectual property, and sending it to somebody else's
-server is rarely your call — it's company policy or a clause in the NDA. So don't.
+server is rarely your call: it is company policy, or a clause in the NDA. So don't.
 
 **Windows, no Python:** download `plc-lint.exe` from
 [Releases](https://github.com/caspershes/plc-lint/releases/latest), drag your `.xml` or
 `.export` onto it. An HTML report appears next to the file and opens in your browser.
 Windows has not seen this binary before and it is not code-signed, so SmartScreen will say
-"unknown publisher" — "More info" → "Run anyway", or run it from a terminal.
+"unknown publisher", so pick "More info" → "Run anyway", or run it from a terminal.
 
 **Anywhere with Python 3.9+:** no dependencies, the engine is standard library only.
 
-**No network calls at all** — and that is enforced by a test, not by a promise:
+**No network calls at all**, and that is enforced by a test rather than by a promise:
 [`tests/cli_local.py`](tests/cli_local.py) runs the whole analysis with `socket` replaced
 by one that raises.
 
@@ -103,10 +103,10 @@ python cli.py p.xml --fail-on high       # exit code 1 if there are high-severit
 python cli.py p.xml --profile heating    # optional rule profiles: heating, plcopen-naming
 ```
 
-The report is identical to the hosted one — same 48 rules, same engine file. What the
+The report is identical to the hosted one: same 48 rules, same engine file. What the
 hosted version adds: sharing a link, history across builds, diffs between two exports,
 the acceptance protocol and the signed certificate. What only the local version does:
-`.export` — the same rules plus the five device-and-visualisation checks above. A 30 MB
+`.export`, the same rules plus the five device-and-visualisation checks above. A 30 MB
 export does not belong in a browser upload, and that file is the one you are least likely
 to be allowed to send anywhere.
 
@@ -124,7 +124,7 @@ GitHub Action in this repository:
 ```
 
 The results land on the job summary page as a table, high-severity findings become
-annotations, and the run is still entirely local — the analyzer runs on the runner and
+annotations, and the run is still entirely local: the analyzer runs on the runner and
 makes no network calls.
 
 | input | default | |
@@ -135,7 +135,7 @@ makes no network calls.
 | `lang` | `en` | `en` or `ru` |
 | `html` | `false` | also produce HTML reports and upload them as an artifact |
 
-Outputs: `score`, `high`, `medium`, `low`, `files`, `json` — so you can gate a merge on
+Outputs: `score`, `high`, `medium`, `low`, `files`, `json`, so you can gate a merge on
 the score rather than on severity:
 
 ```yaml
@@ -171,14 +171,14 @@ MIT licensed. Fork it, vendor it, wire it into your own pipeline.
 - **ST** is analyzed line-by-line.
 - **Graphical languages (CFC/LD/FBD/SFC)** are covered by **name occurrence** plus
   a couple of precise graph checks (literal-0 divisor in DIV/MOD). Graphical
-  **logic is not analyzed** — and the report says so, per project.
+  **logic is not analyzed**, and the report says so, per project.
 - It's **static analysis**. It does **not** replace commissioning, FAT, or checking
   logic against the spec. It catches classes of mistakes; it doesn't prove correctness.
 
 ## The certificate
 
 A paid tier turns a report into a **verified quality certificate** (PDF) with a public
-`/verify/<token>` link and an embeddable badge — for handovers and FAT packages.
+`/verify/<token>` link and an embeddable badge, for handovers and FAT packages.
 The analysis and the full report are always free.
 
 ## Feedback wanted

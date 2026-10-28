@@ -2,13 +2,13 @@
 
 Notes for anyone who wants to parse the format themselves, or who wonders why the
 analyser treats an export differently from a PLCopenXML file. None of this is needed
-to *use* the tool — see the [README](../README.md) for that.
+to *use* the tool; see the [README](../README.md) for that.
 
 ## How a program is stored
 
 In an export a POU body is stored line by line, and the declarations sit in a separate
 section. The parser rebuilds them into a PLCopenXML-shaped tree and hands that tree to
-the usual analyser — one rule set, one set of texts, no second engine to drift apart.
+the usual analyser: one rule set, one set of texts, no second engine to drift apart.
 The format is detected by content, not by extension.
 
 Parsing is streaming, with subtree clearing: a 29 MB export costs about 47 MB of memory
@@ -17,7 +17,7 @@ and 205 globals in roughly two seconds.
 
 ## Three things that cost time
 
-1. **The same device parameter can appear three times** — the template from the device
+1. **The same device parameter can appear three times**: the template from the device
    description, an internal copy, and only the last one is the actual configuration.
    Take the **last** occurrence. Reading the first one made an earlier tool report
    "sensor type not selected" three times on a project that had Pt1000 configured.
@@ -35,7 +35,7 @@ captions from different elements merge.
 ## What the export adds to the analysis
 
 Screen bindings and unit-conversion objects count as uses, so a setpoint that lives
-only on a screen is no longer reported as dead — on a live project the whole weather
+only on a screen is no longer reported as dead: on a live project the whole weather
 curve is built from unit-conversion objects and never appears in ST. The same data
 turns "nothing writes this alarm" from a guess into a fact, which is why that finding
 is raised to critical on `.export` and stays a warning on PLCopenXML.
