@@ -122,6 +122,40 @@ with tempfile.TemporaryDirectory() as tmp:
     check(res.returncode == 2, f"код ошибки 2 (получено {res.returncode})")
     check("PLCopenXML" in res.stderr, "сказано, что это не экспорт PLCopenXML")
 
+print("7. --json не трогает каталог входа")
+# Прогон «только чтение» в CI или на чужом проекте не должен оставлять следов:
+# раньше рядом с входом появлялся *-report.html, хотя HTML никто не просил.
+with tempfile.TemporaryDirectory() as tmp:
+    xml = os.path.join(tmp, "client_project.xml")
+    with open(xml, "wb") as fh:
+        fh.write(data)
+    before = sorted(os.listdir(tmp))
+    res = subprocess.run([sys.executable, os.path.join(ROOT, "cli.py"), xml, "--json"],
+                         capture_output=True, text=True, timeout=120)
+    check(res.returncode == 0, f"код возврата: {res.returncode}")
+    check(sorted(os.listdir(tmp)) == before,
+          f"каталог входа не изменился: {sorted(os.listdir(tmp))}")
+    # явная просьба — HTML рядом с файлом, как ждёт GitHub Action при html: true
+    res = subprocess.run([sys.executable, os.path.join(ROOT, "cli.py"), xml, "--json", "--html"],
+                         capture_output=True, text=True, timeout=120)
+    check(os.path.exists(os.path.join(tmp, "client_project-report.html")),
+          "--json --html: HTML рядом с файлом")
+    check(json.loads(res.stdout)[0]["summary"]["high"] == report.summary["high"],
+          "--json --html: JSON в stdout не испорчен")
+    os.remove(os.path.join(tmp, "client_project-report.html"))
+    # файл сразу после --html не должен стать путём отчёта (иначе вход затёрт)
+    res = subprocess.run([sys.executable, os.path.join(ROOT, "cli.py"), "--html", xml, "--no-color"],
+                         capture_output=True, text=True, timeout=120)
+    check(open(xml, "rb").read() == data, "--html перед файлом: вход не перезаписан")
+    check(os.path.exists(os.path.join(tmp, "client_project-report.html")),
+          "--html перед файлом: HTML рядом с файлом")
+
+print("8. справка на двух языках")
+for lg, word in (("ru", "файлов не пишет"), ("en", "writes no files")):
+    res = subprocess.run([sys.executable, os.path.join(ROOT, "cli.py"), "--help", "--lang", lg],
+                         capture_output=True, text=True, timeout=120)
+    check(word in res.stdout, f"--help --lang {lg}: про --json сказано, что файлов нет")
+
 print()
 print("CLI LOCAL OK" if not fail else f"CLI LOCAL: {fail} провал(ов)")
 sys.exit(1 if fail else 0)

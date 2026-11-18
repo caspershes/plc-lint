@@ -375,6 +375,129 @@ def blank_comments(s: str) -> str:
     return s
 
 
+# ---------- общий разбор ST: вызовы, аргументы, идентификаторы ----------
+#
+# Регэкспы с «одним уровнем вложенных скобок» ломаются на первом же реальном
+# проекте: `T(IN := TRUE, PT := DWORD_TO_TIME(REAL_TO_DWORD(x)))` разбирался как
+# вызов DWORD_TO_TIME, и таймер числился «без уставки». Поэтому вызов ищется
+# счётчиком скобок, а строки и комментарии гасятся до разбора. Наращивать
+# вложенность в регэкспе нельзя: глубина в коде ничем не ограничена.
+
+def st_mask(s: str) -> str:
+    """Комментарии и содержимое строковых литералов → пробелы, длина и переносы
+    строк сохраняются. Скобка или `;` внутри строки после этого не путают разбор."""
+    out = list(s or "")
+    i, n = 0, len(out)
+    while i < n:
+        c = out[i]
+        if c == "(" and i + 1 < n and out[i + 1] == "*":
+            j = s.find("*)", i + 2)
+            j = n if j < 0 else j + 2
+        elif c == "/" and i + 1 < n and out[i + 1] == "/":
+            j = s.find("\n", i)
+            j = n if j < 0 else j
+        elif c in ("'", '"'):
+            j = i + 1
+            while j < n and s[j] != c:
+                j += 2 if s[j] == "$" else 1     # $' и $" — экранирование в IEC
+            j = min(j + 1, n)
+            i += 1                               # кавычки оставляем, гасим содержимое
+            j -= 1
+            for k in range(i, j):
+                if out[k] != "\n":
+                    out[k] = " "
+            i = j + 1
+            continue
+        else:
+            i += 1
+            continue
+        for k in range(i, j):
+            if out[k] != "\n":
+                out[k] = " "
+        i = j
+    return "".join(out)
+
+
+_CALL_HEAD = re.compile(r"\b([A-Za-z_]\w*)\s*\(")
+
+
+def st_close(text, open_pos):
+    """Позиция скобки, закрывающей ту, что стоит в text[open_pos]; None, если её нет.
+    text должен быть уже пропущен через st_mask."""
+    depth = 0
+    for k in range(open_pos, len(text)):
+        ch = text[k]
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+            if depth == 0:
+                return k
+    return None
+
+
+def st_calls(text):
+    """Все вызовы `имя(...)` в тексте, включая вложенные: (имя, аргументы, начало, конец).
+
+    Аргументы — текст между скобками с погашенными строками и комментариями,
+    позиции — в исходном тексте (длина при маскировании не меняется)."""
+    src = st_mask(text)
+    for m in _CALL_HEAD.finditer(src):
+        op = m.end() - 1
+        cl = st_close(src, op)
+        if cl is None:
+            continue
+        yield m.group(1), src[op + 1:cl], m.start(), cl + 1
+
+
+def st_args(args):
+    """Аргументы вызова на верхнем уровне: [(формальный|None, ':='|'=>'|None, значение)].
+    Запятые внутри вложенных скобок и индексов не делят аргумент."""
+    parts, depth, cur = [], 0, []
+    for ch in args:
+        if ch in "([":
+            depth += 1
+        elif ch in ")]":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append("".join(cur))
+            cur = []
+            continue
+        cur.append(ch)
+    parts.append("".join(cur))
+    res = []
+    for p in parts:
+        if not p.strip():
+            continue
+        m = re.match(r"\s*([A-Za-z_]\w*)\s*(:=|=>)(.*)$", p, re.S)
+        if m:
+            res.append((m.group(1), m.group(2), m.group(3).strip()))
+        else:
+            res.append((None, None, p.strip()))
+    return res
+
+
+def st_call_arg(args, *names):
+    """Значение входного аргумента `ИМЯ := …` по одному из имён (без учёта регистра)."""
+    want = {n.upper() for n in names}
+    for formal, op, val in st_args(args):
+        if formal and op == ":=" and formal.upper() in want:
+            return val
+    return None
+
+
+def ident_re(name, suffix=""):
+    """Регэксп идентификатора IEC 61131-3: без учёта регистра (стандарт его не
+    различает) и с границами слова. Одно место, чтобы правила не расходились:
+    `TmrUP` в объявлении и `tmrUp(...)` в коде — один таймер."""
+    return re.compile(rf"(?<![\w]){re.escape(name)}(?!\w){suffix}", re.I)
+
+
+def ident_called(name, text):
+    """Есть ли в тексте вызов `name(`, в любом регистре."""
+    return bool(ident_re(name, r"\s*\(").search(text))
+
+
 # ---------- эвристики (из review.py) ----------
 def find_undeclared(pous, decl):
     res = {}
@@ -437,7 +560,7 @@ def heur_uncalled_fb(pous):
                 insts[v.get("name")] = t
         body = strip_comments(d["body"])
         for inst, t in insts.items():
-            called = re.search(rf'\b{re.escape(inst)}\s*\(', body)
+            called = ident_called(inst, body)
             used = re.search(rf'\b{re.escape(inst)}\.(Q|ET|IN|CLK)\b', body, re.I)
             if used and not called:
                 hits.append((name, inst, t.upper()))
@@ -452,6 +575,31 @@ def heur_regex(pous, pattern, flags=0):
         for i, (o, b) in enumerate(zip(orig, blanked), 1):  # но показываем оригинал строки
             if re.search(pattern, b, flags):
                 hits.append((name, i, o.strip()))
+    return hits
+
+
+def heur_conv_mul(pous, func):
+    r"""Умножение ПОСЛЕ конверсии: `REAL_TO_TIME(x) * N` — дробь уже отброшена, и
+    множится усечённое значение.
+
+    Умножение ВНУТРИ аргумента (`REAL_TO_TIME(ABS(x) * 1000)`) — правильный порядок:
+    сначала пересчёт в REAL, потом конверсия. Жадный регэксп `\(.*\)\s*\*` путал
+    эти случаи на любых вложенных скобках, поэтому закрывающая скобка конверсии
+    ищется счётчиком, а `*` проверяется строго за ней."""
+    hits = []
+    head = re.compile(rf"\b{func}\s*\(", re.I)
+    for name, d in pous.items():
+        orig = d["body"].splitlines()
+        src = st_mask(d["body"])
+        seen = set()
+        for m in head.finditer(src):
+            cl = st_close(src, m.end() - 1)
+            if cl is None or not re.match(r"\s*\*(?!\*)", src[cl + 1:]):
+                continue
+            line = src[:m.start()].count("\n") + 1
+            if line not in seen:
+                seen.add(line)
+                hits.append((name, line, orig[line - 1].strip() if line <= len(orig) else ""))
     return hits
 
 
@@ -563,17 +711,34 @@ def dead_pous(root, pous, extra=""):
     entry_points = task_pou_instances(root)
     dead = []
     for name in pous:
-        if name == "PLC_PRG" or name.startswith("Check"):
+        if name.upper() == "PLC_PRG" or name.lower().startswith("check"):
             continue
         if name.lower() in entry_points:
             continue
-        used_call = re.search(rf'\b{re.escape(name)}\s*\(',
-                              bodies.replace(f"{pous[name]['kw']} {name}", ""), re.I)
-        used_type = re.search(rf'\b{re.escape(name)}\b', decls, re.I)
-        if used_call or used_type:
+        text = bodies.replace(f"{pous[name]['kw']} {name}", "")
+        used_call = ident_called(name, text)
+        used_type = ident_re(name).search(decls)
+        # программу вызывают и без скобок: `Prog;` (CoDeSys 2.3 так пишет почти всегда,
+        # в 3.x это тоже допустимо). Только для PROGRAM: ФБ зовут через экземпляр,
+        # функцию — всегда со скобками.
+        used_stmt = pous[name]["kw"] == "PROGRAM" and st_called_bare(name, text)
+        if used_call or used_type or used_stmt:
             continue
         dead.append(name)
     return dead
+
+
+_STMT_START = r"(?:^|(?<=;)|(?<=\bTHEN)|(?<=\bELSE)|(?<=\bDO)|(?<=\bREPEAT)|(?<=[^:]:))"
+
+
+def st_called_bare(name, text):
+    """Вызов программы оператором без скобок: `Prog;` в начале оператора.
+
+    Начало оператора — начало строки, после `;`, после THEN/ELSE/DO/REPEAT или
+    после метки CASE `1:`. Присваивание `x := Prog;` сюда не подходит: перед
+    именем стоит `:=`, а не одиночное двоеточие."""
+    pat = re.compile(_STMT_START + r"\s*" + re.escape(name) + r"\s*;", re.I | re.M)
+    return bool(pat.search(st_mask(text)))
 
 
 # ---------- генерик-правила: именование / magic numbers / комментарии ----------
@@ -759,8 +924,6 @@ def heur_copy_paste(pous, window=8, min_subst=4):
 # массивов (`arr[1]`) отсекаются сами: перед ними не буква.
 _CHAN_IDX = re.compile(r"(?<=[A-Za-z_])(\d+)(?![0-9])")
 _CHAN_MEMBER = re.compile(r"\b([A-Za-z_][A-Za-z_0-9]*?)_?(\d+)_([A-Za-z_0-9]+)\b")
-_CHAN_CALL = re.compile(r"\b([A-Za-z_]\w*)\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)", re.S)
-_CHAN_ARG = re.compile(r"([A-Za-z_]\w*)\s*(?::=|=>)\s*([^,]+)")
 
 FAMILY_MIN_MEMBERS = 3      # два канала — это не семейство, а пара
 INDEX_GROUP_MIN = 3         # минимум строк в группе, иначе «большинства» не существует
@@ -826,14 +989,14 @@ def heur_param_channel_mismatch(pous):
     hits = []
     for name, d in pous.items():
         src = strip_comments(d["body"])
-        for m in _CHAN_CALL.finditer(src):
-            fb, args = m.group(1), m.group(2)
+        for fb, args, start, _end in st_calls(src):
             if ":=" not in args and "=>" not in args:
                 continue
-            line0 = src[:m.start()].count("\n") + 1
+            line0 = src[:start].count("\n") + 1
             chan = {}
-            for a in _CHAN_ARG.finditer(args):
-                pname, val = a.group(1), a.group(2)
+            for pname, _op, val in st_args(args):
+                if not pname:
+                    continue
                 pidx = _CHAN_IDX.findall(pname)
                 vidx = set(_CHAN_IDX.findall(val))
                 if not pidx or not vidx:
@@ -915,9 +1078,6 @@ def heur_index_mismatch(pous):
 # вариант вместе с дефектным, то есть было бы бесполезным.
 _SE_ASSIGN = re.compile(r"^\s*([\w.\[\]]+)\s*:=\s*([^;]+);", re.M)
 _SE_IDENT = re.compile(r"\b([A-Za-z_]\w*(?:\.\w+)?)\b")
-_SE_CALL = re.compile(r"\b(\w+)\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)", re.S)
-_SE_IN = re.compile(r"(\w+)\s*:=\s*([^,]+)")
-_SE_OUT = re.compile(r"(\w+)\s*=>\s*([^,)]+)")
 # обратная связь «оборудование реально работает»: факт вращения, а не команда на него
 _SE_FEEDBACK = re.compile(r"work|running|state|feedback|fact", re.I)
 _SE_COMMAND = re.compile(r"\brun_|\bcmd_|\bstart_|_run\b|_cmd\b", re.I)
@@ -954,12 +1114,15 @@ def _combinational_inputs(body, ins, outs):
     цепочку «нет отклика → таймер → авария → выбор ветки», а это штатная защита, а не петля.
     Прототип на control-flow взрывался ложными, на data-flow даёт ноль.
     """
+    # имена сравниваются без учёта регистра: IEC 61131-3 его не различает
     deps = {}
     for lhs, rhs in _SE_ASSIGN.findall(strip_comments(body)):
-        deps.setdefault(lhs.split("[")[0], set()).update(_SE_IDENT.findall(rhs))
+        deps.setdefault(lhs.split("[")[0].lower(), set()).update(
+            x.lower() for x in _SE_IDENT.findall(rhs))
+    ins_l = {i.lower(): i for i in ins}
     res = {}
     for o in outs:
-        seen, stack, acc = set(), [o], set()
+        seen, stack, acc = set(), [o.lower()], set()
         while stack:
             cur = stack.pop()
             if cur in seen:
@@ -968,9 +1131,9 @@ def _combinational_inputs(body, ins, outs):
             for d in deps.get(cur, ()):
                 acc.add(d)
                 stack.append(d)
-        hit = acc & set(ins)
+        hit = {ins_l[a] for a in acc if a in ins_l}
         if hit:
-            res[o] = hit
+            res[o.lower()] = hit
     return res
 
 
@@ -991,24 +1154,24 @@ def heur_self_enable(pous):
             continue
         comb = _combinational_inputs(d["body"], ins, outs)
         if comb:
-            fb_comb[name] = comb
+            fb_comb[name.lower()] = comb
 
     hits = []
     for pou, d in pous.items():
         src = strip_comments(d["body"])
-        inst = _iface_names(d.get("iface"), "localVars")
+        inst = {k.lower(): v for k, v in _iface_names(d.get("iface"), "localVars").items()}
         out_src = {}          # переменная-приёмник ← (тип FB, выход, {вход: поданный сигнал})
-        for m in _SE_CALL.finditer(src):
-            iname, args = m.group(1), m.group(2)
-            ftype = inst.get(iname)
-            if not ftype or ftype not in fb_comb:
+        for iname, args, _a, _b in st_calls(src):
+            ftype = inst.get(iname.lower())
+            if not ftype or ftype.lower() not in fb_comb:
                 continue
-            ins_map = {a: b.strip() for a, b in _SE_IN.findall(args)}
-            for oname, target in ((a, b.strip()) for a, b in _SE_OUT.findall(args)):
-                deps_in = fb_comb[ftype].get(oname)
+            parsed = st_args(args)
+            ins_map = {a.lower(): v for a, op, v in parsed if op == ":="}
+            for oname, target in ((a, v) for a, op, v in parsed if op == "=>"):
+                deps_in = fb_comb[ftype.lower()].get(oname.lower())
                 if deps_in:
                     out_src[target] = (ftype, oname,
-                                       {i: ins_map.get(i, "") for i in deps_in})
+                                       {i: ins_map.get(i.lower(), "") for i in deps_in})
         if not out_src:
             continue
         for m in _SE_ASSIGN.finditer(src):
@@ -1019,7 +1182,7 @@ def heur_self_enable(pous):
             line = src[:m.start()].count("\n") + 1
             idx = _chan_idx(cmd)
             for var, (ftype, oname, ins_map) in out_src.items():
-                if not re.search(rf"\b{re.escape(var)}\b", rhs):
+                if not ident_re(var).search(rhs):
                     continue
                 for inp, sig in ins_map.items():
                     if not sig or not _SE_FEEDBACK.search(sig):
@@ -1387,8 +1550,7 @@ def bool_const(f):
 
 
 # ---------- таймер сбрасывается собственным условием отсчёта ----------
-_TR_CALL = re.compile(r"\b([A-Za-z_]\w*)\s*\(([^()]*(?:\([^()]*\)[^()]*)*)\)", re.S)
-_TR_IN = re.compile(r"\b(?:IN|CLK|CU)\s*:=\s*([^,)]+)", re.I | re.S)
+_TR_INPUTS = ("IN", "CLK", "CU")      # вход, по которому считает таймер/детектор/счётчик
 _TR_SIMPLE = re.compile(r"^[A-Za-z_][\w.]*(?:\[[^\]]*\])?$")
 _TR_KNOWN = ("TON", "TOF", "TP", "TONOF", "BLINK")
 
@@ -1419,13 +1581,12 @@ def _tr_polarity(kind):
 
 def _tr_in_var(text):
     """`T(IN := V)` → ('T','V'), если V — простая булева переменная, иначе None."""
-    for m in _TR_CALL.finditer(text):
-        a = _TR_IN.search(m.group(2))
-        if not a:
+    for inst, args, _a, _b in st_calls(text):
+        v = st_call_arg(args, *_TR_INPUTS)
+        if v is None:
             continue
-        v = a.group(1).strip()
         if _TR_SIMPLE.match(v) and v.upper() not in ("TRUE", "FALSE"):
-            return m.group(1), v
+            return inst, v
     return None
 
 
@@ -1475,11 +1636,11 @@ _TR_ZERO_PT = re.compile(r"T#0+(?:MS|S|M|H)?\b", re.I)
 def _tr_preset_positive(body, inst):
     """Есть ли у экземпляра НЕнулевая уставка. При нулевой выход истинен сразу,
     и рассуждение «Q тождественно ложен» неверно."""
-    for m in _TR_CALL.finditer(body):
-        if m.group(1).lower() != inst.lower():
+    for name, args, _a, _b in st_calls(body):
+        if name.lower() != inst.lower():
             continue
-        a = re.search(r"\bPT\s*:=\s*([^,)]+)", m.group(2), re.I)
-        if a and not _TR_ZERO_PT.fullmatch(a.group(1).strip()):
+        a = st_call_arg(args, "PT")
+        if a and not _TR_ZERO_PT.fullmatch(a):
             return True
     a = re.search(rf"\b{re.escape(inst)}\s*\.\s*PT\s*:=\s*([^;]+)", body, re.I)
     return bool(a) and not _TR_ZERO_PT.fullmatch(a.group(1).strip())
@@ -1569,12 +1730,11 @@ def _tm_sites(items, inst, conds, out):
     """Места вызова экземпляра вместе с условиями ветвей, внутри которых он лежит."""
     for it in items:
         if it["kind"] == "stmt":
-            for m in _TR_CALL.finditer(it["text"]):
-                if m.group(1).lower() != inst:
+            for name, args, _a, _b in st_calls(it["text"]):
+                if name.lower() != inst:
                     continue
-                a = _TR_IN.search(m.group(2))
-                out.append({"conds": list(conds), "in": a.group(1).strip() if a else None,
-                            "line": it["line"], "items": items,
+                out.append({"conds": list(conds), "in": st_call_arg(args, *_TR_INPUTS),
+                            "args": args, "line": it["line"], "items": items,
                             "text": re.sub(r"\s+", " ", it["text"]).strip()[:110]})
         elif it["kind"] == "if":
             for b in it["branches"]:
@@ -1648,7 +1808,12 @@ def heur_fb_call_overwritten(pous):
     Второй вызов перетирает первый в том же скане: до таймера доходит только
     последнее значение входа. Вызовы во ВЗАИМОИСКЛЮЧАЮЩИХ ветвях — приём
     законный («в одной ветви пускаем, в другой сбрасываем»), он встретился на
-    корпусе семь раз и правилом не трогается."""
+    корпусе семь раз и правилом не трогается.
+
+    Пара «сначала `IN := FALSE`, потом что угодно» — тоже законна: это перезапуск
+    таймера в одном скане. Первый вызов не пустой, он обнуляет ET и Q, и второй
+    начинает отсчёт заново. Так пишут повсеместно (в том числе в библиотечных
+    примерах производителей), поэтому литерал FALSE в первом вызове правило не трогает."""
     hits = []
     for name, d in pous.items():
         tree = st_blocks(d["body"] or "")
@@ -1658,6 +1823,8 @@ def heur_fb_call_overwritten(pous):
             with_in = [s for s in sites if s["in"]]
             for i in range(len(with_in) - 1):
                 a, b = with_in[i], with_in[i + 1]
+                if a["in"].upper() == "FALSE":
+                    continue          # перезапуск: сброс, затем новый пуск
                 if a["items"] is b["items"] and st_key(a["in"]) != st_key(b["in"]):
                     hits.append((name, b["line"], inst, a["in"], b["in"], a["line"], b["text"]))
                     break
@@ -1702,8 +1869,7 @@ def heur_fb_preset_missing(pous):
             _tm_sites(tree, inst, [], sites)
             if not sites:
                 continue          # не вызван вовсе — это другое правило
-            if any(re.search(rf"\b{field}\s*:=", _TR_CALL.match(s["text"]).group(2), re.I)
-                   for s in sites if _TR_CALL.match(s["text"])):
+            if any(st_call_arg(s["args"], field) is not None for s in sites):
                 continue
             if re.search(rf"\b{re.escape(inst)}\s*\.\s*{field}\s*:=", body, re.I):
                 continue
@@ -1723,8 +1889,8 @@ def _tm_decl_has_pt(iface, inst, field="PT"):
 
 
 # ---------- условие, тождественно ложное после подстановки ----------
-_AF_IN = re.compile(r"\bIN\s*:=\s*([^,)]+)", re.I | re.S)
-_AF_CALL = re.compile(r"^\s*([A-Za-z_]\w*)\s*\(\s*\)\s*;", re.M)
+# вызов программы оператором: `Prog();` или без скобок `Prog;` (CoDeSys 2.3)
+_AF_CALL = re.compile(r"(?:^|(?<=;))\s*([A-Za-z_]\w*)\s*(?:\(\s*\))?\s*;", re.M)
 AF_MAX_COMBOS = 8            # произведение вариантов присваивания; выше — не считаем
 
 
@@ -1812,8 +1978,10 @@ def _af_walk(pou, items, defs, locals_, hits):
 
     for it in items:
         if it["kind"] == "stmt":
-            for m in _AF_IN.finditer(it["text"]):
-                _af_check(pou, it["line"], "in", m.group(1), cur, hits)
+            for _n, args, _a, _b in st_calls(it["text"]):
+                v = st_call_arg(args, "IN")
+                if v is not None:
+                    _af_check(pou, it["line"], "in", v, cur, hits)
             a = st_assignment(it["text"])
             if a:
                 _af_check(pou, it["line"], "assign", a[1], cur, hits)
@@ -2248,14 +2416,20 @@ def heur_div_zero(pous):
     return hits
 
 
-def heur_case_without_else(pous):
+def heur_case_without_else(pous, root=None):
     """CASE без ELSE — неучтённые значения селектора молча игнорируются.
     Консервативно: если МЕЖДУ CASE и END_CASE есть любой ELSE (в т.ч. вложенного IF),
-    не флагуем → нет ложных срабатываний, возможны ложноотрицательные."""
+    не флагуем → нет ложных срабатываний, возможны ложноотрицательные.
+
+    Второе исключение — селектор, который приходит в ФБ только литералами из покрытого
+    множества (`fb(sel := 2)` во всех местах вызова при метках 1 и 2): неучтённому
+    значению взяться неоткуда. Это доказывается только когда видно всё — см.
+    `_case_selector_covered`; при любом сомнении находка остаётся."""
     hits = []
     for name, d in pous.items():
+        lines = strip_comments(d["body"]).splitlines()
         stack = []  # [start_line_index, has_else]
-        for idx, ln in enumerate(strip_comments(d["body"]).splitlines()):
+        for idx, ln in enumerate(lines):
             has_case = re.search(r'\bCASE\b', ln, re.I)
             has_end = re.search(r'\bEND_CASE\b', ln, re.I)
             if has_case and not has_end:
@@ -2264,9 +2438,91 @@ def heur_case_without_else(pous):
                 stack[-1][1] = True
             if has_end and stack:
                 start, has_else = stack.pop()
-                if not has_else:
-                    hits.append((name, start + 1))
+                if has_else:
+                    continue
+                if root is not None and _case_selector_covered(
+                        name, d, lines[start:idx + 1], pous, root):
+                    continue
+                hits.append((name, start + 1))
     return hits
+
+
+_CASE_SEL = re.compile(r"\bCASE\s+([A-Za-z_]\w*)\s+OF\b", re.I)
+_CASE_LABEL = re.compile(r"^\s*(\d[\d\s,.]*?)\s*:(?!=)", re.M)
+
+
+def _case_labels(block):
+    """Целые метки CASE: `1:`, `1, 2:`, `3..5:`. None — если есть вложенный CASE
+    (его метки смешались бы с нашими) или метка, которую не разобрать."""
+    if len(re.findall(r"\bCASE\b", "\n".join(block[1:]), re.I)) > 0:
+        return None
+    first = _CASE_SEL.search(block[0])
+    text = "\n".join([block[0][first.end():]] + block[1:])
+    labels = set()
+    for m in _CASE_LABEL.finditer(text):
+        for part in m.group(1).split(","):
+            part = part.strip()
+            rng = re.fullmatch(r"(\d+)\s*\.\.\s*(\d+)", part)
+            if rng:
+                lo, hi = int(rng.group(1)), int(rng.group(2))
+                if hi - lo > 1000:
+                    return None
+                labels.update(range(lo, hi + 1))
+            elif part.isdigit():
+                labels.add(int(part))
+            else:
+                return None
+    return labels
+
+
+def _case_selector_covered(name, d, block, pous, root):
+    """Селектор CASE — вход этого ФБ, и ВО ВСЕХ местах вызова всех его экземпляров
+    на этот вход подан целый литерал из меток. Тогда ELSE не нужен.
+
+    Отказываемся доказывать (находка остаётся), если: это не ФБ; селектор не вход
+    или ФБ сам его переписывает; экземпляр объявлен массивом или в составе другого
+    типа; вызов без этого аргумента, позиционный или в графике (там аргументов
+    не видно); вход пишут снаружи полем `inst.sel := …`; вызовов нет вовсе."""
+    if d.get("kw") != "FUNCTION_BLOCK":
+        return False
+    m = _CASE_SEL.search(block[0])
+    if not m:
+        return False
+    sel = m.group(1)
+    if sel.lower() not in {k.lower() for k in _iface_names(d.get("iface"), "inputVars")}:
+        return False
+    if ident_re(sel, r"\s*:=").search(strip_comments(d.get("fulltext", d["body"]))):
+        return False
+    labels = _case_labels(block)
+    if not labels:
+        return False
+    fb = ident_re(name)
+    insts = set()
+    for v in root.iter(q("variable")):
+        t = type_str(v.find(q("type")))
+        if t.strip().lower() == name.lower():
+            insts.add((v.get("name") or "").lower())
+        elif fb.search(t):
+            return False      # массив экземпляров или поле структуры — вызовы не сосчитать
+    insts.discard("")
+    if not insts:
+        return False
+    sites = 0
+    for _pn, pd in pous.items():
+        text = st_mask(pd.get("fulltext", pd["body"]))
+        for inst in insts:
+            if ident_re(inst, r"\s*\.\s*" + re.escape(sel) + r"\s*:=").search(text):
+                return False
+            heads = len(ident_re(inst, r"\s*\(").findall(text))
+            calls = [args for n, args, _a, _b in st_calls(text) if n.lower() == inst]
+            if heads != len(calls):
+                return False  # вызов из графики или без закрывающей скобки
+            for args in calls:
+                val = st_call_arg(args, sel)
+                if val is None or not val.isdigit() or int(val) not in labels:
+                    return False
+                sites += 1
+    return sites > 0
 
 
 NESTING_MAX = 4  # глубже — трудно читать/сопровождать
@@ -2807,6 +3063,706 @@ def cfc_signals(root):
     return {"cfc_stale_read": stale, "cfc_reverse_edges": rev, "cfc_graph_edges": tot}
 
 
+# ---------- правила из ревью двух реальных проектов (П-7…П-15) ----------
+# Каждое правило выведено из живого дефекта, найденного руками. Свои разборщики вызовов
+# и типов здесь намеренно локальные (`_rx_*`): общие регэкспы движка (_TR_CALL и др.)
+# понимают один уровень скобок, а их правка — отдельная работа со своими эталонами.
+
+_RX_UNSIGNED = {"USINT", "UINT", "UDINT", "ULINT", "BYTE", "WORD", "DWORD", "LWORD"}
+_RX_ELEMENTARY = {"BOOL", "SINT", "INT", "DINT", "LINT", "USINT", "UINT", "UDINT", "ULINT",
+                  "BYTE", "WORD", "DWORD", "LWORD", "REAL", "LREAL", "TIME", "DATE", "TOD",
+                  "DT", "TIME_OF_DAY", "DATE_AND_TIME", "STRING", "WSTRING"}
+
+
+def _rx_calls(text):
+    """Все вызовы `Имя(...)` с аргументами по балансу скобок, любая вложенность.
+    Возвращает [(имя, текст_аргументов, позиция_имени)]. Текст — без комментариев."""
+    out = []
+    for m in re.finditer(r"\b([A-Za-z_]\w*)\s*\(", text):
+        depth, j = 1, m.end()
+        while j < len(text) and depth:
+            c = text[j]
+            if c == "(":
+                depth += 1
+            elif c == ")":
+                depth -= 1
+            j += 1
+        if depth == 0:
+            out.append((m.group(1), text[m.end():j - 1], m.start()))
+    return out
+
+
+def _rx_split_args(args):
+    """Аргументы вызова по запятым верхнего уровня."""
+    parts, depth, cur = [], 0, []
+    for c in args:
+        if c in "([":
+            depth += 1
+        elif c in ")]":
+            depth -= 1
+        if c == "," and depth == 0:
+            parts.append("".join(cur))
+            cur = []
+        else:
+            cur.append(c)
+    parts.append("".join(cur))
+    return [p.strip() for p in parts if p.strip()]
+
+
+def _rx_named(args):
+    """{формальный_lower: (формальный, фактический)} для аргументов вида `p := v`."""
+    res = {}
+    for a in _rx_split_args(args):
+        m = re.match(r"^([A-Za-z_]\w*)\s*:=\s*(.+)$", a, re.S)
+        if m:
+            res[m.group(1).lower()] = (m.group(1), " ".join(m.group(2).split()))
+    return res
+
+
+def _rx_blank(s):
+    """Гасит комментарии с учётом ВЛОЖЕННОСТИ `(* (* … *) … *)`, сохраняя длину и
+    переносы строк. В CoDeSys закомментированный блок часто сам содержит комментарии;
+    blank_comments движка их не вкладывает и «оживляет» хвост такого блока."""
+    s = s or ""
+    out, i, depth, n = [], 0, 0, len(s)
+    while i < n:
+        two = s[i:i + 2]
+        if two == "(*":
+            depth += 1
+            out.append("  ")
+            i += 2
+        elif two == "*)" and depth:
+            depth -= 1
+            out.append("  ")
+            i += 2
+        elif depth:
+            out.append("\n" if s[i] == "\n" else " ")
+            i += 1
+        elif two == "//":
+            j = s.find("\n", i)
+            j = n if j < 0 else j
+            out.append(" " * (j - i))
+            i = j
+        else:
+            out.append(s[i])
+            i += 1
+    return "".join(out)
+
+
+def _rx_strip(s):
+    return _rx_blank(s)
+
+
+def _rx_line(text, pos):
+    return text.count("\n", 0, pos) + 1
+
+
+def _rx_src_line(body, i):
+    lines = (body or "").splitlines()
+    return lines[i - 1].strip() if 0 < i <= len(lines) else ""
+
+
+def _rx_struct_map(root):
+    """{тип_lower: {поле_lower: тип}} по пользовательским структурам проекта."""
+    smap = {}
+    for dt in root.iter(q("dataType")):
+        st = None
+        for el in dt.iter():
+            if loc(el) == "struct":
+                st = el
+                break
+        if st is None:
+            continue
+        smap[(dt.get("name") or "").lower()] = {
+            (v.get("name") or "").lower(): type_str(v.find(q("type")))
+            for v in st.findall(q("variable"))}
+    return smap
+
+
+def _rx_local_types(d):
+    """{имя_lower: (тип, константа?, секция)} по интерфейсу POU."""
+    res = {}
+    iface = d.get("iface")
+    if iface is None:
+        return res
+    for tag, _kw in SECTIONS:
+        sec = iface.find(q(tag))
+        if sec is None:
+            continue
+        const = (sec.get("constant") or "").lower() in ("true", "1")
+        for v in sec.findall(q("variable")):
+            res[(v.get("name") or "").lower()] = (type_str(v.find(q("type"))), const, tag)
+    return res
+
+
+def _rx_global_consts(root):
+    parent = {c: p for p in root.iter() for c in p}
+    out = set()
+    for gv in root.iter(q("globalVars")):
+        p = parent.get(gv)
+        if p is not None and loc(p) == "interface":
+            continue
+        if (gv.get("constant") or "").lower() in ("true", "1"):
+            out |= {(v.get("name") or "").lower() for v in gv.findall(q("variable"))}
+    return out
+
+
+def _rx_type_of(path, d, decl, smap):
+    """Тип выражения-пути `a`, `a.b.c` (без индексов) или None, если не выводится."""
+    parts = st_key(path).split(".")
+    lt = _rx_local_types(d).get(parts[0])
+    t = lt[0] if lt else decl.get(parts[0])
+    for p in parts[1:]:
+        if t is None:
+            break
+        t = smap.get(t.lower(), {}).get(p)
+    if t is None and len(parts) > 1:
+        # объявление экземпляра структуры потерялось (бывает у конвертированных старых
+        # проектов), а сама структура в экспорте есть: берём тип поля, если поле с таким
+        # именем во всех структурах проекта одного типа
+        seen = {f[parts[-1]] for f in smap.values() if parts[-1] in f}
+        t = seen.pop() if len(seen) == 1 else None
+    return t
+
+
+# --- П-7a: выброс в серии однотипных записей ---
+_RX_ADR_IDX = re.compile(r"\bADR\s*\(\s*([A-Za-z_][\w.]*)\s*\[\s*(\d+)\s*\]\s*\)", re.I)
+_RX_IDX_ASSIGN = re.compile(r"^\s*([A-Za-z_][\w.]*)\s*\[\s*(\d+)\s*\]\s*:=")
+_RX_LEAD_CALL = re.compile(r"^\s*([A-Za-z_]\w*)\s*\(")
+
+
+def _rx_write_sites(body):
+    """Записи в ячейку массива по литеральному индексу: [(форма, буфер, индекс, строка)].
+    Форма — имя функции, которой передают ADR(буфер[k]), или ':=' для прямой записи."""
+    sites = []
+    for i, ln in enumerate(_rx_blank(body or "").splitlines(), 1):
+        mc = _RX_LEAD_CALL.match(ln)
+        if mc:
+            for m in _RX_ADR_IDX.finditer(ln):
+                sites.append((mc.group(1).lower(), m.group(1), int(m.group(2)), i))
+            continue
+        m = _RX_IDX_ASSIGN.match(ln)
+        if m:
+            sites.append((":=", m.group(1), int(m.group(2)), i))
+    return sites
+
+
+def heur_write_series_outlier(pous, decl, smap):
+    """Серия однотипных записей `F(x, ADR(A[k]))` / `A[k] := …` в один буфер, а несколько
+    записей той же формы уходят в буфер B — и номера B лежат ровно в дыре нумерации A.
+    Так выглядит строчка, скопированная из соседнего блока без замены имени буфера."""
+    hits = []
+    for name, d in pous.items():
+        sites = _rx_write_sites(d["body"])
+        by_shape = {}
+        for shape, buf, k, i in sites:
+            by_shape.setdefault(shape, []).append((buf, k, i))
+        for shape, items in by_shape.items():
+            bufs = {}
+            for buf, k, i in items:
+                bufs.setdefault(st_key(buf), []).append((buf, k, i))
+            if len(bufs) < 2:
+                continue
+            main = max(bufs, key=lambda b: len(bufs[b]))
+            amain = bufs[main]
+            if len(amain) < 6 or len(amain) < 0.6 * len(items):
+                continue
+            ia = sorted({k for _b, k, _i in amain})
+            tmain = _rx_type_of(main, d, decl, smap)
+            for b, sb in bufs.items():
+                if b == main:
+                    continue
+                tb = _rx_type_of(b, d, decl, smap)
+                if tmain and tb and tmain.split(" OF ")[-1] != tb.split(" OF ")[-1]:
+                    continue
+                # второй буфер может писаться и законно, своей областью: проверяем
+                # каждый сплошной участок его номеров отдельно
+                runs, cur = [], []
+                for k in sorted({k for _b, k, _i in sb}):
+                    if cur and k - cur[-1] > 4:
+                        runs.append(cur)
+                        cur = []
+                    cur.append(k)
+                runs.append(cur)
+                for ib in runs:
+                    if not (ia[0] < ib[0] and ib[-1] < ia[-1]):
+                        continue
+                    if any(ib[0] <= a <= ib[-1] for a in ia):
+                        continue
+                    below = max(a for a in ia if a < ib[0])
+                    above = min(a for a in ia if a > ib[-1])
+                    run = [x for x in sb if ib[0] <= x[1] <= ib[-1]]
+                    first = min(run, key=lambda x: x[2])
+                    hits.append((name, first[2], first[0], amain[0][0], len(run),
+                                 f"{ib[0]}..{ib[-1]}", f"{below}", f"{above}",
+                                 _rx_src_line(d["body"], first[2])))
+    return hits
+
+
+# --- П-7b: перекрытие записей в один глобальный массив из разных POU ---
+def _rx_adr_widths(pous):
+    """Ширина записи функции, которой передают ADR(буфер[k]): по шагу серии вызовов.
+    Серия `F(…, ADR(A[93])); F(…, ADR(A[95]))…` с шагом 2 значит, что F пишет два слова.
+    Нет серии — ширина 1 (осторожно: перекрытие не додумываем)."""
+    steps = {}
+    for d in pous.values():
+        per = {}
+        for shape, buf, k, i in _rx_write_sites(d["body"]):
+            if shape != ":=":
+                per.setdefault((shape, st_key(buf)), []).append(k)
+        for (shape, _b), ks in per.items():
+            ks = sorted(set(ks))
+            for a, b in zip(ks, ks[1:]):
+                steps.setdefault(shape, []).append(b - a)
+    widths = {}
+    for shape, ds in steps.items():
+        if len(ds) >= 2:
+            mode = max(set(ds), key=ds.count)
+            if mode in (2, 4) and ds.count(mode) >= 0.7 * len(ds):
+                widths[shape] = mode
+    return widths
+
+
+def heur_array_write_overlap(pous, decl):
+    """Одни и те же ячейки глобального массива пишут два разных POU, причём хотя бы одна
+    запись — через ADR функцией шириной в несколько слов. Прямые записи `A[k] :=` из двух
+    POU здесь не ловим: так пишут осознанно (инициализация и работа, разные режимы), а
+    многословная запись через указатель затирает соседей незаметно для автора."""
+    widths = _rx_adr_widths(pous)
+    cells = {}      # буфер -> pou -> {ячейка: (строка, через_adr, форма)}
+    for name, d in pous.items():
+        for shape, buf, k, i in _rx_write_sites(d["body"]):
+            b = st_key(buf)
+            if b not in decl:
+                continue
+            w = widths.get(shape, 1) if shape != ":=" else 1
+            for c in range(k, k + w):
+                cells.setdefault(b, {}).setdefault(name, {}).setdefault(
+                    c, (i, shape != ":=", shape, buf))
+    hits = []
+    for b, per in cells.items():
+        names = sorted(per)
+        for x in range(len(names)):
+            for y in range(x + 1, len(names)):
+                p1, p2 = names[x], names[y]
+                common = sorted(set(per[p1]) & set(per[p2]))
+                common = [c for c in common if per[p1][c][1] or per[p2][c][1]]
+                if not common:
+                    continue
+                # отчёт — у того, кто пишет через ADR: там и правка
+                if not any(per[p1][c][1] for c in common):
+                    p1, p2 = p2, p1
+                c0 = common[0]
+                i1, _a, shape, buf = per[p1][c0]
+                mc = _RX_LEAD_CALL.match(_rx_blank(pous[p1]["body"]).splitlines()[i1 - 1])
+                hits.append((p1, i1, buf, p2, per[p2][c0][0], mc.group(1) if mc else shape,
+                             widths.get(shape, 1), _rx_ranges(common),
+                             _rx_src_line(pous[p1]["body"], i1)))
+    return hits
+
+
+def _rx_ranges(nums):
+    out, start, prev = [], None, None
+    for n in nums:
+        if start is None:
+            start = prev = n
+        elif n == prev + 1:
+            prev = n
+        else:
+            out.append(f"{start}" if start == prev else f"{start}..{prev}")
+            start = prev = n
+    if start is not None:
+        out.append(f"{start}" if start == prev else f"{start}..{prev}")
+    return ", ".join(out)
+
+
+# --- П-8: выброс семейства в параметрах вызова ---
+_RX_PATH = re.compile(r"^(?:([A-Za-z_]\w*)\.)?([A-Za-z_]\w*)$")
+_RX_HUNG = re.compile(r"^(?:[a-z]{1,3})(?=[A-Z])")
+
+
+def _rx_tokens(member):
+    """`rValveCtrlFullMove` → ('r', ['Valve', 'Ctrl', 'Full', 'Move'])."""
+    m = _RX_HUNG.match(member)
+    pre = m.group(0) if m else ""
+    rest = member[len(pre):]
+    toks = re.findall(r"[A-Z]+(?![a-z])|[A-Z][a-z0-9]*|[a-z0-9]+", rest.replace("_", " "))
+    return pre, toks
+
+
+def heur_param_family_outlier(pous, root):
+    """В вызове ФБ параметры берутся из одного семейства (`Cfg.rValveCtrl*`), а один —
+    из соседнего (`Cfg.rGorelkaCtrlFullMove`), хотя величина своего семейства с тем же
+    хвостом в проекте есть (`Cfg.rValveCtrlFullMove`). Номера каналов не трогаем: это
+    param-channel-mismatch."""
+    idents = set()
+    for d in pous.values():
+        for m in re.finditer(r"\b[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*",
+                             _rx_strip(d.get("fulltext", d["body"]))):
+            idents.add(m.group(0).lower())
+    smap = _rx_struct_map(root)
+    for flds in smap.values():
+        idents |= set(flds)
+    hits = []
+    for name, d in pous.items():
+        text = _rx_blank(d["body"])
+        for fb, args, pos in _rx_calls(text):
+            named = _rx_named(args)
+            if len(named) < 4:
+                continue
+            fam = {}
+            for formal, val in named.values():
+                m = _RX_PATH.match(val)
+                if not m:
+                    continue
+                pre, toks = _rx_tokens(m.group(2))
+                if len(toks) < 2 or any(c.isdigit() for c in m.group(2)):
+                    continue
+                key = ((m.group(1) or "").lower(), toks[0].lower())
+                fam.setdefault(key, []).append((formal, val, m.group(1), pre, toks))
+            for (s, f), members in fam.items():
+                if len(members) < 3:
+                    continue
+                others = [(k, v) for k, v in fam.items() if k[0] == s and k[1] != f]
+                if len(others) != 1 or len(others[0][1]) != 1:
+                    continue
+                formal, val, struct, pre, toks = others[0][1][0]
+                fam_tok = members[0][4][0]
+                cand = pre + fam_tok + "".join(toks[1:])
+                full = (struct + "." + cand) if struct else cand
+                if full.lower() not in idents and cand.lower() not in idents:
+                    continue
+                if any(v.lower() == full.lower() for _f, v, *_r in members):
+                    continue
+                ln = _rx_line(text, pos + text[pos:].find(formal))
+                hits.append((name, ln, fb, formal, val, full,
+                             (struct + "." if struct else "") + pre + fam_tok + "*",
+                             len(members), _rx_src_line(d["body"], ln)))
+    return hits
+
+
+# --- П-9: выход залипает вне ветвей режима ---
+def _rx_assigns(items, acc):
+    """[(ключ, правая часть, строка)] всех присваиваний в узлах, рекурсивно."""
+    for it in items:
+        if it["kind"] == "stmt":
+            a = st_assignment(it["text"])
+            if a:
+                acc.append((st_key(a[0]), a[1].strip().upper(), it["line"], a[0]))
+        elif it["kind"] == "if":
+            for b in it["branches"]:
+                _rx_assigns(b["items"], acc)
+        else:
+            _rx_assigns(it["items"], acc)
+    return acc
+
+
+def heur_output_stuck_outside_modes(pous):
+    """`IF режим1 … ELSIF режим2 … END_IF` без ELSE на верхнем уровне POU. Дискретный
+    выход включают и выключают внутри КАЖДОЙ ветви, а вне цепочки его не трогает никто.
+    Когда ни одна ветвь не выполняется (отказ датчика, третье положение переключателя),
+    выход остаётся в последнем состоянии: реле под током до концевика."""
+    hits = []
+    for name, d in pous.items():
+        if d.get("lang") != "ST":
+            continue
+        locs = {k for k, (_t, _c, tag) in _rx_local_types(d).items()
+                if tag in ("localVars", "tempVars")}
+        tree = st_blocks(_rx_blank(d["body"]))
+        for idx, node in enumerate(tree):
+            if node["kind"] != "if" or node["has_else"] or len(node["branches"]) < 2:
+                continue
+            if _rx_exhaustive([b["cond"] for b in node["branches"]]):
+                continue                # ветви покрывают все сочетания — «прочего» нет
+            per = [_rx_assigns(b["items"], []) for b in node["branches"]]
+            common = set.intersection(*[{a[0] for a in p} for p in per])
+            outside = set()
+            for j, other in enumerate(tree):
+                if j != idx:
+                    outside |= {a[0] for a in _rx_assigns([other], [])}
+            stuck = []
+            for key in sorted(common - outside):
+                if key.split(".")[0].split("[")[0] in locs:
+                    continue
+                # выход ВЕДУТ в каждой ветви (и включают, и выключают, или выражением);
+                # ветвь, которая только ставит или только снимает, — это триггер
+                # «установить/сбросить», и хранить состояние там и задумано
+                def driven(p):
+                    r = {a[1] for a in p if a[0] == key}
+                    return ("TRUE" in r and "FALSE" in r) or any(
+                        x not in ("TRUE", "FALSE") for x in r)
+                lit = {a[1] for p in per for a in p if a[0] == key}
+                if "TRUE" in lit and all(driven(p) for p in per):
+                    orig = next(a[3] for p in per for a in p if a[0] == key)
+                    stuck.append(orig)
+            if stuck:
+                conds = [" ".join(b["cond"].split()) for b in node["branches"]]
+                hits.append((name, node["line"], stuck, len(node["branches"]),
+                             _rx_src_line(d["body"], node["line"]), conds))
+    return hits
+
+
+_RX_EQ_TRUE = re.compile(r"((?:NOT\s+)?[A-Za-z_][\w.]*)\s*=\s*TRUE\b", re.I)
+_RX_EQ_FALSE = re.compile(r"([A-Za-z_][\w.]*)\s*=\s*FALSE\b", re.I)
+
+
+def _rx_exhaustive(conds):
+    """Покрывают ли условия цепочки IF/ELSIF все сочетания булевых атомов.
+    `x = TRUE` / `x = FALSE` сводятся к `x` / `NOT x`, иначе тавтологию не увидеть."""
+    fs = []
+    for c in conds:
+        c = _RX_EQ_FALSE.sub(r"NOT \1", _RX_EQ_TRUE.sub(r"\1", c or ""))
+        f = bool_parse(c)
+        if f is None:
+            return False
+        fs.append(f)
+    return bool_const(("or", fs)) is True
+
+
+# --- П-11: локальная, в которую только пишут ---
+def heur_write_only_local(pous):
+    """Локальная элементарного типа получает значения, но нигде не читается. unused-local её
+    не видит: имя в коде есть, только слева от `:=`. Обычно это вычисленный и забытый
+    результат: решение посчитано, а действие выполняется без него."""
+    hits = []
+    all_text = {n: _rx_strip(d.get("fulltext", d["body"])) for n, d in pous.items()}
+    for name, d in pous.items():
+        text = all_text[name]
+        for v, _kw in iter_vars(d["iface"], tags={"localVars"}):
+            vn = v.get("name") or ""
+            t = type_str(v.find(q("type")))
+            if not vn or t.upper() not in _RX_ELEMENTARY:
+                continue
+            e = re.escape(vn)
+            occ = re.findall(rf"(?<![\w.]){e}\b", text, re.I)
+            if not occ:
+                continue                       # это unused-local
+            if re.search(rf"\bFOR\s+{e}\s*:=", text, re.I):
+                continue
+            writes = re.findall(rf"(?<![\w.]){e}\s*(?:\[[^\]]*\])?\s*:=(?!\s*=)", text, re.I)
+            outs = re.findall(rf"=>\s*{e}\b", text, re.I)
+            if not writes or len(occ) > len(writes) + len(outs):
+                continue
+            # программа: её локальную может читать другая POU как `Prog.var`
+            if d["kw"] == "PROGRAM" and any(
+                    re.search(rf"\b{re.escape(name)}\.{e}\b", tx, re.I)
+                    for n2, tx in all_text.items() if n2 != name):
+                continue
+            bb = _rx_blank(d["body"])
+            m = re.search(rf"(?<![\w.]){e}\s*(?:\[[^\]]*\])?\s*:=", bb, re.I)
+            ln = bb[:m.start()].count("\n") + 1 if m else 0
+            hits.append((name, ln, vn, t, len(writes), _rx_src_line(d["body"], ln)))
+    return hits
+
+
+# --- П-12: FOR до X - 1 при беззнаковом X ---
+_RX_FOR = re.compile(r"\bFOR\s+([A-Za-z_]\w*)\s*:=\s*([^;]+?)\s+TO\s+([^;]+?)"
+                     r"(?:\s+BY\s+[^;]+?)?\s+DO\b", re.I | re.S)
+_RX_TO_MINUS = re.compile(r"^\(?\s*((?:gvl\.)?[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)\s*-\s*1\s*\)?$",
+                          re.I)
+
+
+def _rx_guarded(path, texts):
+    """Есть ли где-нибудь проверка `X > 0` / `X >= 1` / `X <> 0` / `X = 0` / `X < 1` или
+    зажим `X := MAX(...)` / `LIMIT(...)`."""
+    e = re.escape(path).replace(r"\.", r"\s*\.\s*")
+    pat = re.compile(rf"(?<![\w.]){e}\s*(?:>\s*0|>=\s*1|<>\s*0|=\s*0|<\s*1|<=\s*0)(?![\w.])|"
+                     rf"(?<![\w.:])(?:0\s*<|1\s*<=|0\s*<>|0\s*=|1\s*>|0\s*>=)\s*{e}\b|"
+                     rf"(?<![\w.]){e}\s*:=\s*(?:MAX|LIMIT|SEL)\s*\(", re.I)
+    return any(pat.search(t) for t in texts)
+
+
+def heur_for_unsigned_minus_one(pous, decl, root, smap):
+    """`FOR i := 1 TO X - 1` при беззнаковом X: если X = 0, то X - 1 даёт максимум типа
+    (65535 у WORD) — тысячи итераций за скан и индекс далеко за массивом."""
+    consts = _rx_global_consts(root)
+    texts = [_rx_strip(d.get("fulltext", d["body"])) for d in pous.values()]
+    hits = []
+    for name, d in pous.items():
+        body = _rx_blank(d["body"])
+        lt = _rx_local_types(d)
+        for m in _RX_FOR.finditer(body):
+            mm = _RX_TO_MINUS.match(" ".join(m.group(3).split()))
+            if not mm:
+                continue
+            path = mm.group(1)
+            head = st_key(path).split(".")[0]
+            if (head in lt and lt[head][1]) or head in consts:
+                continue
+            t = _rx_type_of(path, d, decl, smap)
+            if not t or t.upper() not in _RX_UNSIGNED:
+                continue
+            if _rx_guarded(path, texts):
+                continue
+            ln = _rx_line(body, m.start())
+            end = re.search(r"\bEND_FOR\b", body[m.end():], re.I)
+            loop = body[m.end(): m.end() + end.start()] if end else ""
+            arr = re.search(rf"\b([A-Za-z_][\w.]*)\s*\[\s*{re.escape(m.group(1))}\s*\]", loop, re.I)
+            hits.append((name, ln, m.group(1), path, t, arr.group(1) if arr else "",
+                         _rx_src_line(d["body"], ln)))
+    return hits
+
+
+# --- П-13: переполнение до расширения ---
+_RX_NARROW = r"BYTE|WORD|USINT|UINT|SINT|INT"
+_RX_WIDE = r"DWORD|LWORD|UDINT|DINT|ULINT|LINT|REAL|LREAL|TIME"
+_RX_WIDEN = re.compile(rf"\b({_RX_NARROW})_TO_({_RX_WIDE})\s*\(", re.I)
+_RX_BITS = {"BYTE": 8, "USINT": 8, "SINT": 8, "WORD": 16, "UINT": 16, "INT": 16}
+
+
+def heur_overflow_before_widening(pous, decl=None, smap=None):
+    """`WORD_TO_DWORD(w * 60 * 1000)`: произведение считается в узком типе и переполняется
+    раньше, чем его расширяют. Правильно — сначала расширить, потом умножать.
+    Сомножитель, тип которого выводится и он не узкий (REAL, DWORD), снимает находку:
+    тогда произведение считается в широком типе, и речь уже о другом."""
+    decl, smap = decl or {}, smap or {}
+    hits = []
+    for name, d in pous.items():
+        body = _rx_blank(d["body"])
+        for fn, args, pos in _rx_calls(body):
+            m = re.match(rf"^({_RX_NARROW})_TO_({_RX_WIDE})$", fn, re.I)
+            if not m:
+                continue
+            a = " ".join(args.split())
+            if re.search(rf"\b(?:{_RX_NARROW})_TO_|\b(?:{_RX_WIDE})_TO_|\.\d|\d\.|#", a, re.I):
+                continue
+            if "*" not in a or re.search(r"[/+\-]", a):
+                continue
+            factors = [f.strip(" ()") for f in a.split("*")]
+            lits = [int(f) for f in factors if re.fullmatch(r"\d+", f)]
+            names = [f for f in factors if not re.fullmatch(r"\d+", f)]
+            if not names or not all(re.fullmatch(r"[A-Za-z_][\w.]*(?:\[[^\]]*\])?", f)
+                                    for f in names):
+                continue
+            types = [_rx_type_of(re.sub(r"\[.*$", "", f), d, decl, smap) for f in names]
+            if any(t and t.upper() not in _RX_BITS for t in types):
+                continue
+            prod = 1
+            for x in lits:
+                prod *= x
+            if len(names) < 2 and prod < 10:
+                continue
+            src = m.group(1).upper()
+            ln = _rx_line(body, pos)
+            hits.append((name, ln, fn, src, m.group(2).upper(), a, prod,
+                         _rx_src_line(d["body"], ln)))
+    return hits
+
+
+# --- П-14: окно Modbus-слейва ---
+_RX_ADR_PLUS = re.compile(r"^\(?\s*ADR\s*\(\s*([A-Za-z_][\w.]*)\s*\)\s*\+\s*(\d+)\s*\)?$", re.I)
+_RX_ADR_AT = re.compile(r"^\(?\s*ADR\s*\(\s*([A-Za-z_][\w.]*)\s*\[\s*(\d+)\s*\]\s*\)\s*\)?$", re.I)
+_RX_SIZEOF = re.compile(r"^\(?\s*SIZEOF\s*\(\s*([A-Za-z_][\w.]*)\s*\)\s*\)?$", re.I)
+
+
+def heur_buffer_window_overrun(pous, local_arrays, global_arrays):
+    """Вызов получает начало буфера со сдвигом (`ADR(a) + 2` или `ADR(a[k])`, k больше
+    нижней границы), а размер — целиком `SIZEOF(a)`. Окно выходит за массив на сдвиг:
+    чтение отдаёт чужую память, запись мастером её портит."""
+    hits = []
+    for name, d in pous.items():
+        body = _rx_blank(d["body"])
+        for fb, args, pos in _rx_calls(body):
+            vals = [v for _f, v in _rx_named(args).values()] or _rx_split_args(args)
+            starts, sizes = {}, set()
+            for v in vals:
+                v = " ".join(v.split())
+                m = _RX_ADR_PLUS.match(v)
+                if m and int(m.group(2)) > 0:
+                    starts[st_key(m.group(1))] = (m.group(1), f"+{m.group(2)}")
+                    continue
+                m = _RX_ADR_AT.match(v)
+                if m:
+                    b = st_key(m.group(1))
+                    lo = (local_arrays.get(name, {}).get(b) or global_arrays.get(b) or (None,))[0]
+                    if lo is not None and int(m.group(2)) > lo:
+                        starts[b] = (m.group(1), f"[{m.group(2)}]")
+                    continue
+                m = _RX_SIZEOF.match(v)
+                if m:
+                    sizes.add(st_key(m.group(1)))
+            for b in starts.keys() & sizes:
+                ln = _rx_line(body, pos)
+                hits.append((name, ln, fb, starts[b][0], starts[b][1],
+                             _rx_src_line(d["body"], ln)))
+    return hits
+
+
+# --- П-15 (профиль heating): при отказе датчика клапан ГВС ведут на открытие ---
+_RX_DHW = re.compile(r"gvs|dhw|hot_?water|гвс|горяч\w*\s+вод", re.I)
+_RX_FAULT = re.compile(r"alarm|fault|err|avar|fail|break|obryv|neispr", re.I)
+_RX_OPEN_TOK = {"open", "up", "otkr", "opn", "otkryt"}
+_RX_CLOSE_TOK = {"close", "down", "zakr", "cls"}
+
+
+def _rx_open_target(target):
+    toks = {t.lower() for t in _rx_tokens(target.split(".")[-1])[1]}
+    return bool(toks & _RX_OPEN_TOK) and not toks & _RX_CLOSE_TOK
+
+
+def heur_dhw_fault_opens(pous):
+    """Контур ГВС: в ветви отказа датчика выход «открыть» клапана ставят в TRUE. Для
+    отопления это обычное безопасное положение, для ГВС — полный нагрев бойлера без
+    регулирования (перегрев, ожог). Работает только по явным признакам контура ГВС в
+    имени POU или выхода; без них молчит."""
+    hits = []
+    for name, d in pous.items():
+        if d.get("lang") != "ST":
+            continue
+        pou_dhw = bool(_RX_DHW.search(name))
+
+        def walk(items):
+            for it in items:
+                if it["kind"] == "if":
+                    yield it
+                    for b in it["branches"]:
+                        yield from walk(b["items"])
+                elif it["kind"] == "loop":
+                    yield from walk(it["items"])
+
+        for node in walk(st_blocks(_rx_blank(d["body"]))):
+            br = node["branches"]
+            fault_branch = None
+            c0 = br[0]["cond"]
+            if re.search(r"\bNOT\b\s*\(?\s*[\w.]*(?:" + _RX_FAULT.pattern + r")", c0, re.I) \
+                    and node["has_else"]:
+                fault_branch, cond = br[-1], c0
+            elif _RX_FAULT.search(c0) and not re.search(r"\bNOT\b", c0, re.I) \
+                    and not re.search(r"\bOR\b", c0, re.I):
+                fault_branch, cond = br[0], c0
+            if fault_branch is None:
+                continue
+            for key, rhs, ln, orig in _rx_assigns(fault_branch["items"], []):
+                if rhs != "TRUE" or not _rx_open_target(orig):
+                    continue
+                if not (pou_dhw or _RX_DHW.search(orig)):
+                    continue
+                hits.append((name, ln, orig, " ".join(cond.split()), node["line"],
+                             _rx_src_line(d["body"], ln)))
+                break
+    return hits
+
+
+def gated_rule_signals(pous, root, decl):
+    """Счётчики правил П-7…П-15, не прошедших ворота ложных: в отчёт они не идут, но
+    по логам видно, как часто паттерн встречается.
+
+    write_only_local (П-11): на остальных реальных экспортах 71 находка, дефектов в
+    смысле живого случая (вычисленное и забытое решение) среди них единицы; остальное —
+    зеркала значений и флаги для экрана, остатки счётчиков. Экраны CODESYS читают
+    локальные программ и экземпляров, а в PLCopenXML привязок экрана нет, так что
+    «не читается» подтвердить нельзя.
+    overflow_before_widening (П-13): истинность каждой находки зависит от того, в какой
+    разрядности среда считает `WORD * литерал` до конверсии; на ПЛК не проверено. На
+    обучающем проекте при 16 битах выдержка «15 мин» превращалась бы в 49 с — если на
+    объекте выдержка верная, среда считает шире, и правило ложно целиком."""
+    return {
+        "write_only_local": len(heur_write_only_local(pous)),
+        "overflow_before_widening": len(heur_overflow_before_widening(
+            pous, decl, _rx_struct_map(root))),
+    }
+
+
 def candidate_signals(pous):
     """Телеметрия паттернов, на которые ПРАВИЛ ЕЩЁ НЕТ — чтобы по логам реальных проектов
     приоритизировать, какие проверки добавлять (частый паттерн = кандидат в правило).
@@ -2929,6 +3885,16 @@ RULES = {
     "always-false-condition": ("high", "Условие не выполнится ни при каких значениях"),
     "signal-without-source": ("medium", "Аварию никто не формирует"),
     "unsigned-vs-zero": ("medium", "Беззнаковое сравнивается с нулём"),
+    # из ревью двух реальных проектов: каждое правило выведено из живого дефекта;
+    # severity не выше medium, пока нет второго живого примера с другого проекта
+    "write-series-outlier": ("medium", "Запись из серии ушла в чужой буфер"),
+    "array-write-overlap": ("medium", "Два POU пишут одни ячейки массива"),
+    "param-family-outlier": ("medium", "Параметр получает величину чужого узла"),
+    "output-stuck-outside-modes": ("medium", "Выход замирает, когда не выполнен ни один режим"),
+    "for-unsigned-minus-one": ("medium", "Цикл до X - 1 при беззнаковом X"),
+    "buffer-window-overrun": ("medium", "Окно буфера сдвинуто, а размер прежний"),
+    # только в профиле heating: доменная проверка по явным признакам контура ГВС
+    "heating-dhw-fault-opens": ("medium", "ГВС: при отказе датчика клапан открывается"),
     # только для CODESYS ExportFile (.export): в PLCopenXML параметров модулей и
     # привязок визуализации нет вовсе
     "channel-sensor-off": ("high", "У занятого канала снят тип датчика"),
@@ -3234,6 +4200,50 @@ def analyze(src, profiles=None, lang="ru", extra_refs=None) -> Report:
             pou=nm, line=i, code=ln,
             detail=D("index-mismatch", p1=p1, p2=p2, v1=v1, v2=v2, eq=eq, total=total)))
 
+    # --- правила из ревью двух реальных проектов (П-7…П-15) ---
+    _smap = _rx_struct_map(root)
+    for nm, i, buf, main, n, rng, below, above, ln in heur_write_series_outlier(pous, decl, _smap):
+        findings.append(Finding(
+            rule="write-series-outlier", severity=_sev("write-series-outlier"),
+            title=T("write-series-outlier"), pou=nm, line=i, code=ln,
+            detail=D("write-series-outlier", n=n, buf=buf, rng=rng, main=main,
+                     below=below, above=above)))
+
+    for nm, i, buf, other, l2, fn, w, cells, ln in heur_array_write_overlap(pous, decl):
+        findings.append(Finding(
+            rule="array-write-overlap", severity=_sev("array-write-overlap"),
+            title=T("array-write-overlap"), pou=nm, line=i, code=ln,
+            detail=D("array-write-overlap", fn=fn, buf=buf, w=w, cells=cells,
+                     other=other, l2=l2)))
+
+    for nm, i, fb, formal, val, cand, fam, n, ln in heur_param_family_outlier(pous, root):
+        findings.append(Finding(
+            rule="param-family-outlier", severity=_sev("param-family-outlier"),
+            title=T("param-family-outlier"), pou=nm, line=i, code=ln,
+            detail=D("param-family-outlier", fb=fb, formal=formal, val=val, cand=cand,
+                     fam=fam, n=n)))
+
+    for nm, i, outs, k, ln, _conds in heur_output_stuck_outside_modes(pous):
+        findings.append(Finding(
+            rule="output-stuck-outside-modes", severity=_sev("output-stuck-outside-modes"),
+            title=T("output-stuck-outside-modes"), pou=nm, line=i, code=ln,
+            detail=D("output-stuck-outside-modes", k=k,
+                     outs=", ".join(f"`{o}`" for o in outs))))
+
+    for nm, i, ivar, x, typ, arr, ln in heur_for_unsigned_minus_one(pous, decl, root, _smap):
+        text = D("for-unsigned-minus-one", x=x, type=typ, i=ivar)
+        if arr:
+            text += D("for-unsigned-minus-one.arr", arr=arr, i=ivar)
+        findings.append(Finding(
+            rule="for-unsigned-minus-one", severity=_sev("for-unsigned-minus-one"),
+            title=T("for-unsigned-minus-one"), pou=nm, line=i, code=ln, detail=text))
+
+    for nm, i, fb, buf, off, ln in heur_buffer_window_overrun(pous, local_arrays, global_arrays):
+        findings.append(Finding(
+            rule="buffer-window-overrun", severity=_sev("buffer-window-overrun"),
+            title=T("buffer-window-overrun"), pou=nm, line=i, code=ln,
+            detail=D("buffer-window-overrun", fb=fb, buf=buf, off=off)))
+
     for base, in_pous in sorted(find_undeclared(pous, decl).items()):
         findings.append(Finding(
             rule="undeclared-global", severity=_sev("undeclared-global"),
@@ -3257,9 +4267,14 @@ def analyze(src, profiles=None, lang="ru", extra_refs=None) -> Report:
             rule="int-division", severity=_sev("int-division"), title=T("int-division"),
             pou=nm, line=i, detail=T("int-division"), code=ln))
 
-    for rule, pattern in (("real-to-time-mul", r'REAL_TO_TIME\s*\(.*\)\s*\*'),
-                          ("real-to-word-mul", r'REAL_TO_WORD\s*\(.*\)\s*\*'),
-                          ("double-semicolon", r';;')):
+    for rule, func in (("real-to-time-mul", "REAL_TO_TIME"),
+                       ("real-to-word-mul", "REAL_TO_WORD")):
+        for nm, i, ln in heur_conv_mul(pous, func):
+            findings.append(Finding(
+                rule=rule, severity=_sev(rule), title=T(rule),
+                pou=nm, line=i, detail=T(rule), code=ln))
+
+    for rule, pattern in (("double-semicolon", r';;'),):
         for nm, i, ln in heur_regex(pous, pattern):
             findings.append(Finding(
                 rule=rule, severity=_sev(rule), title=T(rule),
@@ -3317,7 +4332,7 @@ def analyze(src, profiles=None, lang="ru", extra_refs=None) -> Report:
             rule="empty-branch", severity=_sev("empty-branch"), title=T("empty-branch"),
             pou=nm, line=i, detail=i18n.term(lang, desc)))
 
-    for nm, i in heur_case_without_else(pous):
+    for nm, i in heur_case_without_else(pous, root):
         findings.append(Finding(
             rule="case-without-else", severity=_sev("case-without-else"),
             title=T("case-without-else"), pou=nm, line=i,
@@ -3428,6 +4443,13 @@ def analyze(src, profiles=None, lang="ru", extra_refs=None) -> Report:
                 title=T("heating-ai-no-range-check"), pou=pou,
                 detail=D("heating-ai-no-range-check", n=len(variables), ex=ex, more=more, pou=pou)))
 
+    if "heating" in profiles:
+        for nm, i, out, cond, l0, ln in heur_dhw_fault_opens(pous):
+            findings.append(Finding(
+                rule="heating-dhw-fault-opens", severity=_sev("heating-dhw-fault-opens"),
+                title=T("heating-dhw-fault-opens"), pou=nm, line=i, code=ln,
+                detail=D("heating-dhw-fault-opens", out=out, cond=cond, l0=l0)))
+
     # сортировка: high → medium → low
     order = {"high": 0, "medium": 1, "low": 2}
     findings.sort(key=lambda f: (order[f.severity], f.pou, f.line or 0))
@@ -3435,7 +4457,8 @@ def analyze(src, profiles=None, lang="ru", extra_refs=None) -> Report:
     return Report(name=name, version=version, pou_count=len(pous),
                   globals_count=len(decl), findings=findings, rendered=rendered,
                   modified=modified,
-                  signals={**candidate_signals(pous), **cfc_signals(root)}, profile_stats=profile_stats, device=device,
+                  signals={**candidate_signals(pous), **cfc_signals(root),
+                           **gated_rule_signals(pous, root, decl)}, profile_stats=profile_stats, device=device,
                   coverage=coverage)
 
 

@@ -1,6 +1,6 @@
 # PLC Lint rule reference
 
-**48 checks.** Each entry says what it reads and how to fix it. Run them on your own export at [plc-linter.com](https://plc-linter.com), or on the [example project](examples/).
+**55 checks.** Each entry says what it reads and how to fix it. Run them on your own export at [plc-linter.com](https://plc-linter.com), or on the [example project](examples/).
 
 Severity: 🔴 high · 🟠 medium · ⚪ low.
 
@@ -71,7 +71,7 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 - If the field genuinely does not apply to that channel (no such hardware), drop its declaration. The rule goes quiet and the GVL loses a dead variable.
 
 ### `fb-call-overwritten` · A second call to the instance overwrites the first
-**Reads:** A stateful FB instance, a timer or an edge detector, holds a single state. Two calls in a row within the same branch with different inputs mean only the last one reaches the timer: the first call cannot affect anything, although it looks live in the code. Calls in MUTUALLY EXCLUSIVE branches are a legitimate pattern: start the timer in one branch, reset it via `IN := FALSE` in the other. That pattern occurs seven times in our corpus and the rule leaves it alone; it only fires when both calls sit on the same path and run in the same scan.
+**Reads:** A stateful FB instance, a timer or an edge detector, holds a single state. Two calls in a row within the same branch with different inputs mean that within one scan the timer sees an input change that never happened in the process: the second call immediately overwrites the state left by the first, while the code looks like two live calls. Two legitimate patterns are left alone. Calls in MUTUALLY EXCLUSIVE branches: start the timer in one branch, reset it via `IN := FALSE` in the other (seven times in our corpus). And a restart within one scan: `t(IN := FALSE); t(IN := TRUE, PT := …);`, where the first call clears ET and Q and the second starts counting afresh. The rule only fires when both calls sit on the same path, run in the same scan, and the first one is not a reset.
 
 **Fix:**
 - Keep a single call and make the input an expression: `t(IN := a AND NOT b, PT := …);`.
@@ -170,7 +170,21 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 - Replace the ELSIF chain with an array of curve points and interpolation.
 
 
-## 🟠 Medium (15)
+## 🟠 Medium (22)
+
+### `array-write-overlap` · Two POUs write the same array cells
+**Reads:** A shared exchange array (HMI registers, Modbus, SCADA) is filled by several POUs, each with its own part. The rule collects the cells every POU writes by literal index and looks for overlaps between different POUs. The width of pointer writes is taken into account: if a function receives `ADR(A[k])` in series with a step of 2, it writes two words and `A[k+1]` is taken too. Direct writes `A[k] :=` from two POUs are not a finding on their own (that is often deliberate: initialisation versus operation, different modes), so a pointer write must be part of the overlap. The consequence: whichever runs later in the scan wins, the other POU's value never reaches the receiver, and the screen shows garbage instead of outputs or run times.
+
+**Fix:**
+- Separate the addresses: every value in the exchange table needs its own cell, and a two-word value takes two.
+- If two POUs really take turns writing the cell, keep a single writer and give the other one a flag or a separate variable.
+
+### `buffer-window-overrun` · Buffer window shifted but size unchanged
+**Reads:** An exchange block (Modbus slave, serial port, file write) is given the start of a memory area and its size. If the start is shifted (`ADR(a) + 2` or `ADR(a[k])` with k above the lower bound) while the size stays the full `SIZEOF(a)`, the window runs past the end of the array by exactly the shift. Reading the last registers returns a neighbouring variable's contents, and a master write (Modbus functions 6/16) corrupts it; which variable depends on how the linker laid out memory. The compiler does not catch it, as both arguments are type-correct. The mistake usually appears when the first register is shifted to match the HMI map and the size is forgotten.
+
+**Fix:**
+- Reduce the size by the shift: `BufSize := SIZEOF(a) - 2` (shift in bytes), or declare the array to match the window.
+- Check the HMI or master register map: the last register it accesses must lie inside the array.
 
 ### `case-without-else` · CASE without an ELSE branch (no default)
 **Reads:** CASE without an ELSE branch: if the selector takes a value not among the labels, nothing runs: a silent skip (a common state-machine bug).
@@ -185,6 +199,20 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 **Fix:**
 - Fill the branch with logic or remove the empty IF/loop.
 - If it is empty on purpose, leave an explanatory comment.
+
+### `for-unsigned-minus-one` · Loop up to X - 1 with an unsigned X
+**Reads:** The upper bound `X - 1` with an unsigned X (UINT, WORD, UDINT, DWORD and the like) is never negative: with X = 0 the subtraction wraps around and yields the type's maximum, 65535 for a WORD. A loop that should not run at all runs tens of thousands of times per scan: the cycle time blows past the watchdog, and if the counter indexes an array, reads and writes go far beyond its bounds (without CheckBounds that corrupts neighbouring memory). The rule stays silent if X is a constant or the project somewhere checks `X > 0`, `X >= 1`, `X <> 0`, `X = 0` or clamps `X := MAX(…)`/`LIMIT(…)`. Most often X is a unit count entered on the HMI: during commissioning or after replacing the controller, zero is its most likely value.
+
+**Fix:**
+- Wrap the loop in `IF X > 0 THEN … END_IF` or clamp the value where it is entered: `X := LIMIT(1, X, N_MAX);`.
+- If X indexes an array, check the upper end too: `X - 1` must not exceed the array's declared bound.
+
+### `heating-dhw-fault-opens` · DHW: valve opens on a sensor fault
+**Reads:** In the sensor-fault branch (or "not AUTO") the program should drive the actuator to a safe position, and which position is safe depends on the circuit. For space heating, fully open is usually right: the building does not freeze. For domestic hot water, an open heating-side valve means maximum heat into the exchanger with no control: overheated water at the tap and a scalding risk. The rule only looks at DHW circuits, and only by explicit markers: DHW/GVS in the POU or output name. In the branch that runs on a sensor fault (`IF NOT alarm … ELSE` or `IF alarm THEN`) it looks for an "open" output set to TRUE. Without explicit circuit markers it stays silent. Which position is safe is the process engineer's call: the finding is a question, not a verdict.
+
+**Fix:**
+- Agree the safe position of the DHW valve on a sensor fault with the process engineer; it is usually closed or a fixed position, not open.
+- If opening is deliberate (for instance, there is independent overheat protection), say so in a comment inside the fault branch.
 
 ### `implicit-check-disabled` · Check present but not active
 **Reads:** A check function exists in the project but is not active: either not registered (no CheckFunction tag, so the runtime never calls it), or an entire category (bounds/division/range/pointers) has no active check.
@@ -213,6 +241,20 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 **Fix:**
 - Add the object: in CODESYS right-click Application → `Add Object → POUs for Implicit Checks`, tick the ones you need (Bounds, Division, Range, Pointer).
 - Make sure the implementation is not empty: the default stubs protect, an empty body does not.
+
+### `output-stuck-outside-modes` · Output freezes when no mode branch applies
+**Reads:** Unit control is often written as a chain of modes: `IF sensor_ok AND AUTO THEN … ELSIF MANUAL THEN … END_IF`. A discrete output (open/close, start) is switched on and off inside every branch. If there is no fallback branch and nothing outside the chain touches the output, then in any state not covered by a branch (sensor fault, selector at OFF, lost link) the output keeps last scan's value. If an open command was active at that moment, the relay stays energised until the limit switch, and the software position estimate stops updating. The rule leaves set/reset latches alone (a branch that only sets or only clears the output is meant to hold state) as well as chains whose conditions cover every combination.
+
+**Fix:**
+- Add an ELSE branch that puts the output into a safe state (usually both relays off), or reset the output before the chain.
+- Agree with the process engineer what is safe for this unit: for some it is stop, for others fully open; either way the decision belongs in the code, not in the previous scan.
+
+### `param-family-outlier` · Parameter fed from another unit's settings
+**Reads:** A call to a unit's control block normally receives that unit's settings as one family: `Cfg.rValvePeriod`, `Cfg.rValveMinMove`, `Cfg.rValveMaxMove`. The rule looks for a call where one argument comes from a neighbouring family (`Cfg.rBurnerFullMove`) even though the value of the call's own family with the same tail exists in the project (`Cfg.rValveFullMove`). That is the trace of copying from a neighbouring unit. It is dangerous because commissioning does not reveal it: by default both settings are often equal and everything works. The defect shows only when one of them is changed, and from then on the position model, delay or protection of this unit runs on someone else's setting. Channel numbers are not compared here: a mixed-up number is what param-channel-mismatch catches.
+
+**Fix:**
+- Pass the value from the call's own family (its name is in the message) and check that its default is right.
+- If the units really share one setting, give it a common name not tied to either unit, so the next person copying the code does not take it for a mistake.
 
 ### `real-to-time-mul` · REAL_TO_TIME(...)*N truncates the setpoint
 **Reads:** REAL_TO_TIME treats the number as milliseconds and truncates the fraction before conversion, so fractional time setpoints are lost. Multiply before REAL_TO_TIME.
@@ -276,6 +318,13 @@ Severity: 🔴 high · 🟠 medium · ⚪ low.
 **Fix:**
 - Enable the task watchdog: in the task configuration tick Watchdog and set the time (usually a multiple of the cycle, e.g. 100 ms for a 10 ms cycle).
 - At least for the main control task; visualization and cloud tasks can go without one.
+
+### `write-series-outlier` · One write in a series goes to another buffer
+**Reads:** A block of uniform writes into an exchange buffer (`Real2word(x, ADR(wData[93]))`, `wData[95] := …`) is usually typed by copying the neighbouring block. The rule looks for writes of the same shape that go into a DIFFERENT buffer, with their indices sitting exactly in a hole of the main buffer's numbering: the main buffer's indices stop just before them and resume just after. That is the trace of lines copied without renaming the buffer. The damage is twofold: those cells of the main buffer are never filled (the receiver sees zeros), and in the other buffer the writes overwrite values that someone else puts there. Neither the compiler nor bounds checking complains: both arrays are declared and the indices are legal.
+
+**Fix:**
+- Compare the buffer name with the neighbouring lines of the series: if it is the same exchange table, change the buffer and the hole in the numbering closes.
+- If writing to the other buffer is intended, move it out of the series into its own block with a comment, so nobody takes it for a copy error and "fixes" it back.
 
 
 ## ⚪ Low (10)

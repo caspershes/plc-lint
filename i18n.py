@@ -109,6 +109,18 @@ STRINGS = {
 "ru": {
     # --- chrome / base ---
     "app.tagline": "бесплатный quality-report для экспортов PLCopenXML",
+    # --- cli.py: справка ---
+    "cli.desc": "Локальная проверка экспорта PLCopenXML или CODESYS .export. Файл никуда не отправляется — программа не выходит в сеть.",
+    "cli.files": "файлы .xml/.export, маски или каталоги",
+    "cli.lang": "язык отчёта",
+    "cli.profile": "дополнительный профиль правил (можно повторять)",
+    "cli.html": "сохранить HTML: без значения — рядом с каждым файлом, со значением — по этому пути (один файл). По умолчанию HTML пишется рядом с файлом, а с --json не пишется вовсе",
+    "cli.no_html": "не сохранять HTML",
+    "cli.open": "открыть HTML в браузере",
+    "cli.json": "машинный вывод в stdout; файлов не пишет, если не задан --html",
+    "cli.fail_on": "вернуть код 1, если есть находки такого уровня и выше (для CI)",
+    "cli.quiet": "только заголовки находок",
+    "cli.no_color": "без ANSI-цветов",
     "nav.pricing": "Тарифы",
     "nav.admin": "Админ",
     "nav.login": "Войти",
@@ -446,7 +458,7 @@ STRINGS = {
                          "Вы запросили сброс пароля в PLC Lint. Перейдите по ссылке "
                          "(действует 1 час):\n\n{link}\n\n"
                          "Если вы не запрашивали сброс — просто игнорируйте это письмо, "
-                         "пароль останется прежним.\n\n— PLC Lint"),
+                         "пароль останется прежним.\n\nPLC Lint"),
 
     # --- demo / контакт / meta ---
     "demo.banner": ("Это <b>демо-отчёт</b> на синтетическом проекте — чтобы показать, что "
@@ -724,18 +736,165 @@ STRINGS = {
     "err.short_password": "Пароль — минимум 8 символов.",
     "err.email_taken": "Такой e-mail уже зарегистрирован.",
     "err.bad_login": "Неверный e-mail или пароль.",
+    # --- сверка матрицы причин и следствий (cause_effect.py) ---
+    "ce.title": "Сверка матрицы причин и следствий с программой",
+    "ce.legend": "✓ совпало · ! расхождение · i совпало, есть что проверить · ? тег не сопоставлен · … не вычислено",
+    "ce.summary": "Расхождений: {n}.",
+    "ce.all_ok": "расхождений нет",
+    "ce.details": "Разбор по ячейкам",
+    "ce.disclaimer": "Проверка статическая: программа не исполнялась на ПЛК. Уставки и выдержки, "
+                     "заданные переменными, на контроллере могут быть другими. Каждую ячейку "
+                     "перед пуском подтвердите имитацией.",
+    "ce.unmapped_head": "Теги матрицы без сопоставления",
+    "ce.unmapped_hint": "Кандидаты только предложены и не применены. Впишите нужные в таблицу "
+                        "соответствия (тег;переменная) и запустите сверку снова.",
+    "ce.no_candidates": "кандидатов нет",
+    "ce.latch_short": "фикс.",
+    "ce.status.ok": "совпало",
+    "ce.status.info": "совпало, есть что проверить",
+    "ce.status.mismatch": "расхождение",
+    "ce.status.unmapped": "тег не сопоставлен",
+    "ce.status.not_computed": "не вычислено",
+    "ce.status.none": "связи нет, и в матрице нет",
+    "ce.status.warning": "предупреждение: связь есть по графу, испытанием не подтверждена",
+    "ce.note.graph_link": "По графу зависимостей путь есть: {path}. Одиночным срабатыванием влияние не подтвердилось (может проявиться в сочетании причин или в другом режиме): проверить.",
+    "ce.note.extra_no_path": "При срабатывании {var} менялся, но пути от причины к нему в программе нет: это не влияние причины, а дрейф выхода (работа по времени, не установился). Не расхождение.",
+    "ce.note.graph_unsure": "По графу пути нет, но граф неполон (неразобранные операторы или библиотечные блоки): «нет связи» без испытания не утверждаем.",
+    "ce.step.graph_no_path": "Граф зависимостей: от {set} до {var} пути нет (в конусе влияния {var} входов: {cone}); испытание не нужно",
+    "ce.path": "Путь: {path}",
+    "ce.assert.head": "Утверждения спецификации по видам",
+    "ce.assert.summary": "Утверждений: PASS {pass}, FAIL {fail}, ERROR {error} (из них заблокировано проваленными {blocked}); предупреждений по графу {warning}.",
+    "ce.assert.type.path_exists": "путь причина → следствие есть",
+    "ce.assert.type.no_path": "лишней связи нет",
+    "ce.assert.type.path_through": "путь идёт через заданный блок",
+    "ce.assert.type.cone_of_influence": "конус влияния выхода",
+    "ce.assert.type.trips": "следствие срабатывает",
+    "ce.assert.type.setpoint": "уставка",
+    "ce.assert.type.delay": "задержка",
+    "ce.assert.type.voting": "голосование",
+    "ce.assert.type.latch": "фиксация",
+    "ce.assert.type.bypass": "байпас",
+    "ce.class.missing": "В матрице есть, в коде нет",
+    "ce.class.extra": "В коде есть, в матрице нет",
+    "ce.class.setpoint": "Уставка",
+    "ce.class.direction": "Направление",
+    "ce.class.delay": "Задержка",
+    "ce.class.voting": "Голосование",
+    "ce.class.action": "Действие",
+    "ce.class.latch": "Фиксация",
+    "ce.class.bypass": "Байпас",
+    "ce.issue.missing.no_path": "Переменная причины не участвует в формировании следствия.",
+    "ce.issue.missing.no_effect": "Причина в логике следствия есть, но перевести его в нужное состояние не может.",
+    "ce.issue.missing.effect_not_formed": "Выход следствия в программе не формируется.",
+    "ce.issue.missing.not_forced": "Причина влияет на следствие, но не гарантирует нужного состояния: результат зависит от того, в каком состоянии была программа (например, выход перестают пересчитывать и он замирает).",
+    "ce.issue.extra": "Программа переводит следствие по условию {cond}, а в матрице ячейки нет.",
+    "ce.issue.setpoint": "В матрице {matrix}, в коде {code}.",
+    "ce.issue.setpoint_var": "В матрице {matrix}, в коде уставка в переменной с другим начальным значением: {code}. Проверьте фактическую на ПЛК.",
+    "ce.issue.direction": "В матрице {matrix}, в коде срабатывает по {code}.",
+    "ce.issue.delay": "В матрице {matrix} с, в коде {code} с (самый быстрый путь).",
+    "ce.issue.voting": "В матрице {matrix}, в коде {code}.",
+    "ce.issue.action": "Причина переводит следствие в обратное состояние (полярность выхода).",
+    "ce.issue.latch_missing": "В матрице с фиксацией, в коде сбрасывается само, когда причина уходит.",
+    "ce.issue.latch_extra": "В матрице без фиксации, в коде держится до сброса: {reset}.",
+    "ce.issue.bypass": "Срабатывание снимается условием, которого нет в матрице: {masks}.",
+    "ce.note.sp_var": "Уставка в переменной {var} (начальное {init}): проверить фактическую на ПЛК.",
+    "ce.note.sp_expr": "Уставка задана выражением {expr}: значение не вычислить статически.",
+    "ce.note.delay_var": "Выдержка в переменной {var} (начальная {init} с): проверить фактическую на ПЛК.",
+    "ce.note.delay_unknown": "Выдержка задана выражением ({var}): величину не вычислить статически.",
+    "ce.note.bypass_ok": "Байпас есть и матрицей разрешён: {masks}.",
+    "ce.note.not_forced": "Срабатывание не безусловно, условие: {when}.",
+    "ce.note.state_dependent": "Срабатывание зависит от внутреннего состояния программы.",
+    "ce.note.too_complex": "Логика слишком разветвлённая для точного разбора.",
+    "ce.note.conditional": "Связь действует, только когда причина {on} в сработавшем состоянии (рабочее условие процесса).",
+    "ce.note.shallow": "Перенос состояния между сканами учтён только для ближайших к причине переменных.",
+    "ce.note.held_by_process": "После ухода причины держится до изменения параметра ({until}): это гистерезис регулирования, не фиксация.",
+    "ce.note.one_scan": "Разобрано в пределах одного скана: запаздывание на скан не учтено.",
+    "ce.note.part_not_computed": "Часть проверки не вычислена (слишком разветвлённая логика): {what}.",
+    "ce.note.untraceable": "Связь статически не прослеживается: следствие зависит от вычисляемых величин ({atoms}). Проверить имитацией.",
+    "ce.action.stop": "стоп", "ce.action.start": "пуск", "ce.action.close": "закрыть",
+    "ce.action.open": "открыть", "ce.action.on": "вкл", "ce.action.off": "выкл",
+    "ce.col.tag": "Тег", "ce.col.desc": "Описание", "ce.col.cond": "Условие",
+    "ce.col.delay": "Задержка, с", "ce.col.voting": "Голос.", "ce.col.cause": "Причина",
+    "ce.col.effect": "Следствие", "ce.col.matrix": "В матрице", "ce.col.code": "В коде",
+    "ce.col.issue": "Расхождение", "ce.col.note": "Проверить", "ce.col.status": "Итог",
+    # --- сверка C&E испытаниями (ce_scenario.py) ---
+    "ce.disclaimer_sim": "Проверка на эмуляторе: программа исполнялась скан за сканом на компьютере, "
+                         "не на ПЛК. Входы вне матрицы подобраны поиском, уставки в переменных "
+                         "взяты из объявлений: на контроллере они могут быть другими. Допущения "
+                         "прогона перечислены ниже; ячейку перед пуском подтвердите на объекте.",
+    "ce.col.scenario": "Испытание",
+    "ce.scenario_steps": "шагов: {n}",
+    "ce.step.normal": "Норма: причины {causes}{chosen}{init}; {scans} сканов по {dt} мс, {var} = {seen}",
+    "ce.step.chosen": ", подобрано {x}",
+    "ce.step.init": ", начальное состояние {x}",
+    "ce.step.normal_fail": "Норма: при причине в норме за {scans} сканов по {dt} мс {var} = {seen}, следствие уже в требуемом состоянии",
+    "ce.step.inverse": "Наоборот: {set}, {scans} сканов, {var} = {seen} (в норме)",
+    "ce.step.trip": "Срабатывание: {set}, {scans} сканов по {dt} мс, {var} = {seen}{t}",
+    "ce.step.trip_more": "С большим запасом: {set}, {scans} сканов, {var} = {seen}{t}",
+    "ce.step.trip_all": "Все каналы: {set}, {scans} сканов, {var} = {seen}{t}",
+    "ce.step.opposite": "Обратное значение: {set}, {scans} сканов, {var} = {seen}{t}",
+    "ce.step.t_yes": ", требуемое через {t} с",
+    "ce.step.t_no": ", требуемого состояния нет",
+    "ce.step.action": "Из требуемого состояния ({pre}) подано {set}: {var} {moved}",
+    "ce.step.moved_yes": "ушло из требуемого",
+    "ce.step.moved_no": "не сдвинулось",
+    "ce.step.frozen": "Команда {pre} при поданной причине: {var} {frozen}",
+    "ce.step.frozen_yes": "на неё не реагирует, выход замер",
+    "ce.step.frozen_no": "реагирует",
+    "ce.step.threshold": "Граница по поведению: {lo} не срабатывает, {hi} срабатывает ({probes} прогонов по {hold} с)",
+    "ce.step.voting": "Голосование: {combos} комбинаций каналов, сработало при {tripped}",
+    "ce.step.return": "Возврат в норму: {set}, {scans} сканов по {dt} мс, {var} {held}",
+    "ce.step.held_yes": "держится",
+    "ce.step.held_no": "отпустило через {t} с",
+    "ce.step.reset": "Сброс: импульс {set} на 1 с{heur}, {scans} сканов, {var} {released}",
+    "ce.step.heur": " (вход найден по имени)",
+    "ce.step.released_yes": "сбросилось",
+    "ce.step.released_no": "не сбросилось",
+    "ce.step.mask": "{kind} {pre}, затем {set}: следствие не сработало",
+    "ce.step.kind.bypass": "Байпас",
+    "ce.step.kind.declared": "Режим из таблицы",
+    "ce.step.kind.mode": "Режим (по имени)",
+    "ce.step.never_written": "Переменная {var} в программе нигде не пишется",
+    "ce.note.no_setpoint": "У аналоговой причины не задана уставка: испытание не построить.",
+    "ce.note.no_normal": "Не нашлось рабочего состояния, в котором {var} не в требуемом состоянии: ячейку нечем испытать.",
+    "ce.note.normal_trips": "Уже при значении {value} следствие срабатывает: граница ближе нормы.",
+    "ce.note.plant_idle": "Причина не подействовала, но установка не в рабочем режиме ({effects} не удалось запустить): причина может действовать только при работе, «нет связи» не утверждается.",
+    "ce.note.voting_too_many": "Каналов больше шести ({n}): перебор комбинаций не делался.",
+    "ce.note.reset_not_found": "Держится, но сброс, который его отпускает, не найден: проверить, как сбрасывается.",
+    "ce.note.mode_masks": "В режиме {modes} ячейка не срабатывает (режим найден по имени, только предложено): проверить, допустимо ли.",
+    "ce.assume.head": "Допущения прогона",
+    "ce.assume.run": "Скан {dt} мс; установление нормы {settle} с по {sdt} мс; поиск нормы: {n} прогонов.",
+    "ce.assume.normal": "Причины в норме: {x}.",
+    "ce.assume.chosen": "Подобрано для нормы (входы вне матрицы): {x}.",
+    "ce.assume.init": "Начальное состояние памяти: {x}.",
+    "ce.assume.skipped": "Не исполнялось (неизвестные функции, библиотеки, методы): {n} мест, переменные сохраняли прежнее значение.",
+    "ce.assume.reset": "Сброс не задан в матрице, подавался вход по имени: {x}.",
+    "ce.assume.modes": "Похожи на режимы (только предложено): {x}.",
+    "ce.assume.extra": "«В коде есть, в матрице нет» ищется одиночным срабатыванием каждой причины из нормы; связи, которые видны только при сочетании причин или в другом режиме, так не ловятся.",
 },
 
 "en": {
     # --- chrome / base ---
     "app.tagline": "free quality report for PLCopenXML exports",
+    # --- cli.py: help ---
+    "cli.desc": "Local check of a PLCopenXML or CODESYS .export file. The file goes nowhere: the program never touches the network.",
+    "cli.files": ".xml/.export files, globs or directories",
+    "cli.lang": "report language",
+    "cli.profile": "extra rule profile (repeatable)",
+    "cli.html": "save HTML: with no value, next to each input file; with a value, to that path (single file). By default HTML is written next to the file, and with --json not at all",
+    "cli.no_html": "do not save HTML",
+    "cli.open": "open the HTML in a browser",
+    "cli.json": "machine-readable output to stdout; writes no files unless --html is given",
+    "cli.fail_on": "exit with code 1 if there are findings of this level or above (for CI)",
+    "cli.quiet": "finding titles only",
+    "cli.no_color": "no ANSI colours",
     "nav.pricing": "Pricing",
     "nav.admin": "Admin",
     "nav.login": "Log in",
     "nav.register": "Sign up",
     "nav.logout": "log out",
-    "base.demo_banner": "Demo stand: payments are not connected — 'unlock export' is free and just demonstrates the feature.",
-    "base.footnote": ("Processing happens in memory — the uploaded code is <strong>not stored</strong>. "
+    "base.demo_banner": "Demo stand: payments are not connected, so 'unlock export' is free and just demonstrates the feature.",
+    "base.footnote": ("Processing happens in memory, and the uploaded code is <strong>not stored</strong>. "
                       "The tool <em>advises</em>; code changes are up to the engineer "
                       "(see what the linter can't see). "
                       "<a href=\"/trust\">What happens to your code →</a>"),
@@ -743,7 +902,7 @@ STRINGS = {
     "plan.popular": "popular",
 
     # --- index ---
-    "index.title": "PLC Lint — static analysis for PLCopenXML exports",
+    "index.title": "PLC Lint: static analysis for PLCopenXML exports",
     # Английская главная бьёт не в «примите чужой проект» (это ситуация редкая), а в то,
     # что верно для каждого: проект собрался, и это ничего не доказывает.
     "index.h1": "Your PLC project compiles. That doesn't mean it works.",
@@ -758,24 +917,22 @@ STRINGS = {
                            'data-ym-goal="home_howto">Project → Export PLCopenXML →</a>'),
     "index.local_h": "Or run it on your own machine",
     "index.local_p": ("Your customer's export is their property, and sending it to somebody "
-                      "else's server is rarely your call. So don't: the local build is one .exe "
-                      "— no install, no Python, <strong>no network calls at all</strong>. Drop an "
+                      "else's server is rarely your call. So don't: the local build is one .exe: no install, no Python, <strong>no network calls at all</strong>. Drop an "
                       "export onto it and the same report appears next to the file."),
     "index.local_btn": "Download for Windows",
-    "index.local_note": "It also reads a CODESYS <code>.export</code>: every program rule works there, <strong>plus five</strong> the hosted version does not have — a sensor type cleared on a wired channel, an unconfigured output, a module excluded from polling, and two screen findings. Linux/macOS: <code>python cli.py project.xml</code> · MIT on GitHub",
+    "index.local_note": "It also reads a CODESYS <code>.export</code>: every program rule works there, <strong>plus five</strong> the hosted version does not have: a sensor type cleared on a wired channel, an unconfigured output, a module excluded from polling, and two screen findings. Linux/macOS: <code>python cli.py project.xml</code> · MIT on GitHub",
     "index.path_upload": "Check it here",
     "index.learn_link": "Bugs explained one by one →",
-    "learn.title": "PLC bugs the compiler accepts — PLC Lint",
+    "learn.title": "PLC bugs the compiler accepts · PLC Lint",
     "learn.meta_desc": ("Detailed write-ups of defects that compile clean in CODESYS and TwinCAT: "
                         "what happens on the controller, why the compiler stays silent, and how "
                         "to find each one in your own project."),
     "learn.h1": "Bugs the compiler accepts, one at a time",
     "learn.lead": ("Each page takes a single defect that builds without a warning: what it does on "
-                   "the controller, why the compiler can't help, and how to find it in your own "
-                   "project — with or without a tool."),
+                   "the controller, why the compiler can't help, and how to find it in your own project, with or without a tool."),
     "learn.nav": "All write-ups",
     "learn.more": "Other write-ups",
-    "index.ci_note": ('Project in git? <code>uses: caspershes/plc-lint@v1</code> — '
+    "index.ci_note": ('Project in git? <code>uses: caspershes/plc-lint@v1</code>: '
                       '<a href="https://github.com/marketplace/actions/plc-lint" rel="noopener" '
                       'data-ym-goal="ci_action">the GitHub Action</a> breaks the build on '
                       'high-severity findings.'),
@@ -786,8 +943,8 @@ STRINGS = {
     # Западный покупатель спотыкается не о цену, а о «кто вы такие»: отвечаем тем,
     # что проверяемо — открытым кодом и локальным запуском, а не обещанием.
     "index.privacy": ('<strong>You don\'t have to trust us.</strong> The analyzer is open source '
-                      '(MIT) and the local build makes no network calls at all — enforced by a '
-                      'test, not by a promise. Uploaded here, the file is processed in memory and '
+                      '(MIT) and the local build makes no network calls at all, enforced by a '
+                      'test rather than by a promise. Uploaded here, the file is processed in memory and '
                       'never written to disk. '
                       '<a href="/trust" data-ym-goal="home_trust">What happens to your code →</a>'),
     "index.profile_opt": ("Also check against the <strong>PLCopen naming</strong> standard "
@@ -807,10 +964,10 @@ STRINGS = {
     "guide.lead": ("The tool accepts a <strong>PLCopenXML</strong> export. Below is how to get one "
                    "in popular IDEs. The export path depends on the IDE, not the controller brand."),
     "guide.tip": ("<strong>Tip.</strong> To get device analysis (controller, modules, I/O mappings, "
-                  "watchdog) — include the <code>Device</code> node in the export. POU/GVL only → "
+                  "watchdog), include the <code>Device</code> node in the export. POU/GVL only → "
                   "code analysis alone. The format is standard PLCopen&nbsp;TC6, so any other "
                   "IEC&nbsp;61131-3 IDE works too."),
-    "guide.more": ("Didn't find your IDE? Write to us — we'll add instructions. The list grows as "
+    "guide.more": ("Didn't find your IDE? Write to us and we will add instructions. The list grows as "
                    "new IDEs appear."),
     "guide.back": "← back to file check",
     "guide.anim_alt": "Three steps to export PLCopenXML from CODESYS: Project menu, select all objects, OK",
@@ -826,27 +983,27 @@ STRINGS = {
     "pricing.go_free": "Switch to Free",
     "pricing.start_free": "Start for free",
     "pricing.subscribe": "Get {label}",
-    "pricing.demo_note": ("Demo stand: payments are not connected — the subscription is activated "
+    "pricing.demo_note": ("Demo stand: payments are not connected, so the subscription is activated "
                           "instantly and for free to demonstrate the feature."),
     "pricing.feature_col": "Feature",
     "pricing.once": "{price} once",
     "pricing.faq": ("Private mode: on Pro/Team nothing is written about the analysis; on Free an "
-                    "anonymized aggregate remains — <a href=\"/trust\">the full field list is on "
-                    "its own page</a>. Cancel anytime — access stays until the end of the paid "
+                    "anonymized aggregate remains; <a href=\"/trust\">the full field list is on "
+                    "its own page</a>. Cancel anytime: access stays until the end of the paid "
                     "period."),
 
     # --- acceptance protocol ---
     "acc.title": "Acceptance protocol · PLC Lint",
-    "acc.h1": "Questions for the contractor — project {name}",
+    "acc.h1": "Questions for the contractor · project {name}",
     "acc.lead": ("An acceptance checklist: what to ask the party handing the site over. No code "
-                 "and no line numbers — plain-language questions you can attach to the acceptance "
+                 "and no line numbers, just plain-language questions you can attach to the acceptance "
                  "act and get a written answer to."),
     "acc.meta": "Project: {name} · blocks: {pou} · score {score}/100 · date {date}",
     "acc.sev_high": "Answer required before signing",
     "acc.sev_medium": "Clarify during acceptance",
     "acc.sev_low": "Notes for maintenance",
     "acc.answer": "Contractor's answer:",
-    "acc.none": "The automatic check produced no questions. That is not a guarantee of correctness — see the disclaimer below.",
+    "acc.none": "The automatic check produced no questions. That is not a guarantee of correctness; see the disclaimer below.",
     "acc.caveat": ("Disclaimer. This is static analysis of exported code: it catches classes of "
                    "mistakes, it does not verify the project against the specification. It does "
                    "not replace commissioning, testing or a logic review against the spec. "
@@ -862,11 +1019,11 @@ STRINGS = {
     "diff.lead": "Two exports of the same project, in a single request. Neither file is stored: the comparison happens in memory and leaves with the response.",
     "diff.file_a": "First file",
     "diff.file_b": "Second file",
-    "diff.file_hint": "order doesn't matter — the newer one is taken from the modification date inside the export",
+    "diff.file_hint": "order does not matter: the newer one is taken from the modification date inside the export",
     "diff.submit": "Compare",
     "diff.demo_link": "See a sample comparison →",
     "diff.order_known": "Order taken from the modification date inside the exports: {old} → {new}.",
-    "diff.order_unknown": "The modification dates match or are missing, so there is nothing to order by. The file uploaded first is treated as the older one — swap them if that's wrong.",
+    "diff.order_unknown": "The modification dates match or are missing, so there is nothing to order by. The file uploaded first is treated as the older one; swap them if that is wrong.",
     "diff.order_swapped": "The files were swapped: the second one turned out to be older.",
     "diff.score_h": "Score",
     "diff.score_same": "unchanged",
@@ -888,9 +1045,9 @@ STRINGS = {
     "diff.task_h": "Tasks",
     "diff.dev_h": "Devices",
     "diff.nothing": "Nothing we can compare has changed between these versions.",
-    "diff.caveat": "The comparison is structural: findings, POU list, interfaces, setpoints, tasks and device addresses. We don't do a line-by-line text diff of the bodies — it drowns in reordering, and any editor already does it.",
+    "diff.caveat": "The comparison is structural: findings, POU list, interfaces, setpoints, tasks and device addresses. We don't do a line-by-line text diff of the bodies: it drowns in reordering, and any editor already does it.",
     "diff.demo_head": "This is a demo on a synthetic pair",
-    "diff.demo_body": "The files are made up, the story isn't: version two fixed an out-of-bounds array access, dropped a stray statement — and introduced a division by a variable that is always zero. The score went up in the process.",
+    "diff.demo_body": "The files are made up, the story isn't: version two fixed an out-of-bounds array access, dropped a stray statement, and introduced a division by a variable that is always zero. The score went up in the process.",
     "diff.demo_cta": "Compare your own versions (Pro) →",
     "diff.nav": "Compare versions",
 
@@ -903,23 +1060,19 @@ STRINGS = {
     "trust.upload_p": ("The file is processed <strong>in memory</strong> and never written to "
                        "disk. The report isn't stored on the server either: it travels back to "
                        "you in a signed token in the URL. So there is no way to open someone "
-                       "else's report by guessing a link, and nothing for us to hand over on "
-                       "request — we don't have it."),
+                       "else's report by guessing a link, and nothing for us to hand over on request: we do not have it."),
     "trust.local_h": "You can send us nothing at all",
     "trust.local_p": ("Everything below describes how our server behaves, and you cannot verify "
                       "that by reading it. So there is a local build: it checks the file on your "
-                      "own machine and makes no network calls. Not a mode and not a promise — the "
-                      "engine is open and the ban is held by a test that runs the whole analysis "
+                      "own machine and makes no network calls. Not a mode and not a promise: the engine is open and the ban is held by a test that runs the whole analysis "
                       "with the socket replaced by one that raises. "
                       "<a href=\"https://github.com/caspershes/plc-lint/releases/latest\" rel=\"noopener\">Download for Windows</a> · "
                       "<a href=\"https://github.com/caspershes/plc-lint\" rel=\"noopener\">sources</a>"),
     "trust.log_h": "What goes into the shared statistics (Free)",
-    "trust.log_p": ("Exactly these fields, one line per analysis. This list isn't a paraphrase — "
-                    "it comes from the code, and a test keeps the two in sync, otherwise it "
+    "trust.log_p": ("Exactly these fields, one line per analysis. This list is not a paraphrase: it comes from the code, and a test keeps the two in sync, otherwise it "
                     "would go stale on the first field someone adds:"),
     "trust.log_state_on": "Statistics collection is currently <strong>on</strong>.",
-    "trust.log_state_off": ("Statistics collection is currently <strong>off entirely</strong> — "
-                            "not even this is written."),
+    "trust.log_state_off": ("Statistics collection is currently <strong>off entirely</strong>: not even this is written."),
     "trust.notlog_h": "What is not in the statistics",
     "trust.notlog_p": ("Not a line of code, no POU or variable names, no file name, no project "
                        "name. The file name used to be logged and was removed in a separate fix: "
@@ -936,12 +1089,10 @@ STRINGS = {
                      "into content, and it never goes into the shared statistics. That is your own "
                      "history and only you can see it. Still no code."),
     "trust.service_h": "Third-party services",
-    "trust.service_p": ("Your code is never sent anywhere — not to cloud models, not to external "
+    "trust.service_p": ("Your code is never sent anywhere: not to cloud models, not to external "
                         "APIs. The analysis is XML parsing and arithmetic on our server. The only "
                         "external thing on these pages is a visit counter, which never touches "
-                        "file contents. Session recording is on for the shop window — home page, "
-                        "pricing, guides, the demo on our own synthetic project — and "
-                        "<strong>off wherever your data is on screen</strong>: the report, your "
+                        "file contents. Session recording is on for the shop window (home page, pricing, guides, the demo on our own synthetic project) and <strong>off wherever your data is on screen</strong>: the report, your "
                         "profile history, version comparison, batch check, acceptance protocol. "
                         "Otherwise the contents of those pages would leave for an external service. "
                         "The exclusion list lives in the code and is covered by a test; the page "
@@ -952,10 +1103,9 @@ STRINGS = {
                         "source (say “linkedin”), the channel, the campaign, and counts of "
                         "visits, analyses and sign-ups. No IP address, no User-Agent, no row per "
                         "visitor, and the counter sets no cookie of its own. The source label "
-                        "lives in the session cookie, so we cannot tie today's visit to one from "
-                        "last week — and we don't try."),
+                        "lives in the session cookie, so we cannot tie today's visit to one from last week, and we do not try."),
     "trust.limits_h": "What we do not promise",
-    "trust.limits_p": ("This is a tool, not a corporate compliance programme: we take on no legal obligations about data processing, and everything above describes how the code works, not what is written in signed paperwork. If your security team has requirements, write to us and we'll discuss them concretely — we won't promise anything in advance."),
+    "trust.limits_p": ("This is a tool, not a corporate compliance programme: we take on no legal obligations about data processing, and everything above describes how the code works, not what is written in signed paperwork. If your security team has requirements, write to us and we'll discuss them concretely; we will not promise anything in advance."),
     "trust.contact": "A question about privacy →",
     "trust.link": "Your code & privacy",
 
@@ -963,8 +1113,7 @@ STRINGS = {
     "bench.title": "Industry benchmark · PLC Lint",
     "bench.h1": "Industry benchmark",
     "bench.lead": ("How many common mistakes other people's projects actually contain. Computed "
-                   "from anonymized upload aggregates: score and rule counts only — no code, "
-                   "no POU names, no file names."),
+                   "from anonymized upload aggregates: score and rule counts only: no code, no POU names, no file names."),
     "bench.n": "projects in the sample",
     "bench.median": "median score",
     "bench.quart": "half of the projects",
@@ -978,7 +1127,7 @@ STRINGS = {
     "bench.empty_h": "Not enough data yet",
     "bench.empty_p": ("The benchmark is published once there are at least {n} analyses. Calling a "
                       "dozen files an “industry average” would be dishonest, and honesty is the "
-                      "whole point of this tool. Upload your export — the sample grows with every "
+                      "whole point of this tool. Upload your export; the sample grows with every "
                       "analysis."),
     "bench.cta": "Check your export →",
     "bench.report_line": ("Your score is <strong>{score}</strong>; the median across {n} projects "
@@ -991,19 +1140,18 @@ STRINGS = {
     # --- second opinion before commissioning (service) ---
     "so.title": "Second opinion before commissioning · PLC Lint",
     "so.h1": "A second opinion before you commission",
-    "so.lead": ("The automatic report tells you what is wrong in the code. This service answers "
-                "the next question — <strong>what it actually means on your site</strong>, and "
+    "so.lead": ("The automatic report tells you what is wrong in the code. This service answers the next question: <strong>what it actually means on your site</strong>, and "
                 "what to fix first."),
     "so.what_h": "What you get",
     "so.price_h": "Price",
     "so.price_p": ("{price} per project. You pay after the review, not before: the write-up comes "
-                   "first, the invoice second — if it wasn't useful, there is nothing to pay for."),
+                   "first, the invoice second. If it was not useful, there is nothing to pay for."),
     "so.limits_h": "What this is not",
     "so.limits_p": ("This is not commissioning and not a certification audit: we don't connect to "
                     "your plant, don't sign acceptance documents and don't take responsibility for "
                     "how the installation behaves. Only the exported code is read."),
     "so.privacy": ("The file arrives by e-mail, is kept until the review is done and then deleted. "
-                   "NDA is fine — send yours along with the request."),
+                   "NDA is fine: send yours along with the request."),
     "so.cta": "Send an export for review →",
     "so.pricing_h": "Need an opinion, not a report?",
     "so.pricing_p": ("Before commissioning you can order an engineer's review: the automatic report "
@@ -1018,7 +1166,7 @@ STRINGS = {
     "register.title": "Sign up · PLC Lint",
     "register.h1": "Sign up",
     "register.lead": ("An account lets you save reports to your profile. Only an aggregate (score and "
-                      "counts) is written to the profile — the code is not stored."),
+                      "counts) is written to the profile; the code is not stored."),
     "register.name": "Display name",
     "register.email": "E-mail",
     "register.password": "Password (min. 8 characters)",
@@ -1047,7 +1195,7 @@ STRINGS = {
     # --- forgot / reset (access recovery) ---
     "forgot.title": "Reset access · PLC Lint",
     "forgot.h1": "Reset access",
-    "forgot.lead": "Enter your account e-mail — we'll send a password-reset link (valid for 1 hour).",
+    "forgot.lead": "Enter your account e-mail and we will send a password-reset link (valid for 1 hour).",
     "forgot.email": "E-mail",
     "forgot.submit": "Send reset link",
     "forgot.back_login": "Remembered it? Log in",
@@ -1060,20 +1208,18 @@ STRINGS = {
     "reset.bad": "This reset link is invalid or expired. Request a new one.",
     "flash.password_changed": "Password changed.",
     "flash.reset_sent": "If that e-mail is registered, we've sent a reset link to it.",
-    "flash.reset_done": "Password updated — log in with your new password.",
+    "flash.reset_done": "Password updated. Log in with your new password.",
     "flash.reset_unavailable": "E-mail sending is currently unavailable. Contact us and we'll help manually.",
     "err.bad_current": "Current password is incorrect.",
     "err.password_mismatch": "Passwords don't match.",
-    "email.reset_subject": "Password reset — PLC Lint",
+    "email.reset_subject": "Password reset · PLC Lint",
     "email.reset_body": ("Hello {name},\n\n"
                          "You requested a password reset for PLC Lint. Open the link below "
                          "(valid for 1 hour):\n\n{link}\n\n"
-                         "If you didn't request this, just ignore this e-mail — your password "
-                         "stays the same.\n\n— PLC Lint"),
+                         "If you didn't request this, just ignore this e-mail; your password stays the same.\n\nPLC Lint"),
 
     # --- demo / contact / meta ---
-    "demo.banner": ("This is a <b>demo report</b> on a synthetic project — to show what you'll "
-                    "get. No need to upload your own code. Want to check yours?"),
+    "demo.banner": ("This is a <b>demo report</b> on a synthetic project, to show what you will get. No need to upload your own code. Want to check yours?"),
     "demo.cta": "Analyze your export",
     "demo.end_head": "This is a synthetic project. Real ones usually have more.",
     "demo.end_body": ("Exporting from CODESYS takes half a minute, the report takes another. "
@@ -1086,15 +1232,15 @@ STRINGS = {
     "meta.og_alt": "PLC Lint card: examples of bugs that compile without errors",
     "contact.title": "Feedback · PLC Lint",
     "contact.h1": "Feedback",
-    "contact.lead": "Criticism, a bug, a rule or pricing idea — send it. We read everything.",
+    "contact.lead": "Criticism, a bug, a rule or pricing idea: send it. We read everything.",
     "contact.msg": "Message",
     "contact.email": "Your e-mail (if you want a reply)",
     "contact.submit": "Send",
     "contact.link": "Feedback",
-    "flash.contact_sent": "Thanks — your message was sent. If you left an e-mail, we'll reply.",
+    "flash.contact_sent": "Thanks, your message was sent. If you left an e-mail, we'll reply.",
     "flash.contact_fail": "Couldn't send right now. Please write directly to {email}.",
     "err.contact_empty": "Please enter a message.",
-    "email.contact_subject": "PLC Lint — feedback",
+    "email.contact_subject": "PLC Lint feedback",
 
     # --- report ---
     "report.title_suffix": "Report",
@@ -1104,22 +1250,21 @@ STRINGS = {
     "report.meta_pou": "POUs",
     "report.meta_globals": "globals",
     "report.private_head": "Private mode ({plan}).",
-    "report.private_body": ("<b>Nothing about this project leaves the request</b> — not even the "
-                            "anonymous aggregate. Only the report aggregate reaches the database, and "
+    "report.private_body": ("<b>Nothing about this project leaves the request</b>, not even the anonymous aggregate. Only the report aggregate reaches the database, and "
                             "only if you click 'Save to profile' yourself."),
-    "report.public_body": ("Your code is never stored — <b>ever</b>. On Free we keep only an anonymous "
+    "report.public_body": ("Your code is never stored, <b>ever</b>. On Free we keep only an anonymous "
                            "aggregate: score and rule counts. No code, no POU names, no project name, "
                            "no file name. "
                            "Want zero logging at all?"),
     "report.public_private_link": "private mode on Pro",
-    "report.public_private_tail": "— we don't even record the aggregate.",
+    "report.public_private_tail": ", and we do not even record the aggregate.",
     "report.ruleset_applied": "Your",
     "report.ruleset_link": "team code standard",
-    "report.ruleset_muted": "was applied: findings muted —",
-    "report.ruleset_overrode": "severity changed —",
+    "report.ruleset_muted": "was applied: findings muted:",
+    "report.ruleset_overrode": "severity changed:",
     "report.ruleset_tail": "Score and counts reflect your standard.",
     "report.score_head": "Quality score: {score}/100",
-    "report.score_sub": ("Save the report to your profile — you'll build a verified quality track. "
+    "report.score_sub": ("Save the report to your profile and you will build a verified quality track. "
                          "The code is not stored, only the aggregate."),
     "report.save": "Save to profile",
     "report.login_save": "Log in and save",
@@ -1131,7 +1276,7 @@ STRINGS = {
     "report.heating_h": "Boiler-house / heat-point profile",
     "report.heating_match": "plausibility-checked:",
     "report.heating_of": "of {n} analog values",
-    "report.heating_note": ("Inputs come from the device tree. A check means a range comparison somewhere in the project <em>or</em> a read of the module's own channel error code — the latter is stronger, since the hardware catches a broken or shorted sensor. Plausibility computed on the HMI is invisible to static analysis — check the project before treating this as a defect."),
+    "report.heating_note": ("Inputs come from the device tree. A check means a range comparison somewhere in the project <em>or</em> a read of the module's own channel error code; the latter is stronger, since the hardware catches a broken or shorted sensor. Plausibility computed on the HMI is invisible to static analysis, so check the project before treating this as a defect."),
     "report.dev_title": "Devices and tasks",
     "report.dev_controller_na": "controller n/d",
     "report.dev_modules": "modules:",
@@ -1158,23 +1303,20 @@ STRINGS = {
     "report.io_vars": "vars",
     "report.no_io": "No I/O mappings found.",
     "report.dev_hint": ("Address, auto-reconnect and I/O mappings are shown for leaf devices, where the "
-                        "data is exact. For buses/masters the parameters are mixed with children — a "
-                        "dash there, not an approximate figure."),
+                        "data is exact. For buses/masters the parameters are mixed with children, so you get a dash there rather than an approximate figure."),
     "report.none_big": "✓ No findings",
-    "report.none_sub": ("No heuristic fired. This is not a guarantee of no bugs — the linter can't see "
+    "report.none_sub": ("No heuristic fired. This is not a guarantee of no bugs: the linter cannot see "
                         "signal polarity, hysteresis or logic against the spec."),
-    "report.noise_note": ("Every rule has a <span class=\"noise-demo\">noise?</span> button — click it "
-                          "if the rule gives irrelevant hits on your code. The signal helps us tune the "
+    "report.noise_note": ("Every rule has a <span class=\"noise-demo\">noise?</span> button; click it if the rule gives irrelevant hits on your code. The signal helps us tune the "
                           "checks: lower the severity, narrow the condition or disable extras. Your code "
                           "is not sent."),
     "report.group_count": "findings",
     "report.noise_btn": "noise?",
-    "report.noise_title": ("Rule gives irrelevant hits? Flag it — we'll account for it when tuning. "
+    "report.noise_title": ("Rule gives irrelevant hits? Flag it and we will account for it when tuning. "
                            "Code is not sent."),
     "report.noise_done": "noted ✓",
     "report.fix_label": "Suggested fixes",
-    "report.coverage_note": ("{n} POU in graphical languages ({langs}) — line-based checks were NOT "
-                             "applied to them; names are partially covered (occurrences in blocks/"
+    "report.coverage_note": ("{n} POU in graphical languages ({langs}): line-based checks were NOT applied to them; names are partially covered (occurrences in blocks/"
                              "expressions). This is a tool limitation, not a sign these POUs are clean."),
     "report.caveat_head": "What the linter does NOT see",
     "report.caveat_body": ("(needs an eye and a cross-check with the spec): signal polarity, swapped "
@@ -1185,22 +1327,22 @@ STRINGS = {
     # --- verify ---
     "verify.title": "Certificate verification · PLC Lint",
     "verify.ok_head": "Authentic certificate",
-    "verify.ok_sub": "The signature is valid — this certificate was issued by PLC Lint and not altered.",
+    "verify.ok_sub": "The signature is valid: this certificate was issued by PLC Lint and not altered.",
     "verify.k_engineer": "Engineer",
     "verify.k_project": "Project",
     "verify.k_hash": "File fingerprint",
     "report.hash_head": "File fingerprint",
-    "report.hash_note": ("The certificate is issued for a file with fingerprint <code>{h}…</code> — any change to the project changes the fingerprint. The file itself is not stored, only its sha256."),
+    "report.hash_note": ("The certificate is issued for a file with fingerprint <code>{h}…</code>; any change to the project changes the fingerprint. The file itself is not stored, only its sha256."),
     "verify.k_date": "Analysis date",
     "verify.k_id": "Report ID",
     "verify.bad_head": "Invalid signature",
-    "verify.bad_sub": "The token is corrupted or forged — this is not an authentic PLC Lint certificate.",
+    "verify.bad_sub": "The token is corrupted or forged: this is not an authentic PLC Lint certificate.",
 
     # --- batch ---
     "batch.title": "Batch check · PLC Lint",
     "batch.back": "← single check",
     "batch.h1": "Batch project check",
-    "batch.lead": ("Upload all project exports at once (up to {max} files) — get a health summary: "
+    "batch.lead": ("Upload all project exports at once (up to {max} files) and get a health summary: "
                    "score per file, cross-file rule frequency and an overall aggregate."),
     "batch.private": "🔒 Private mode: files are not logged.",
     "batch.drop_hint": "drag several .xml here or choose files",
@@ -1213,8 +1355,7 @@ STRINGS = {
     "batchrep.title": "Project summary · PLC Lint",
     "batchrep.back": "← new batch",
     "batchrep.h1": "Project summary",
-    "batchrep.lead": ("{files} file(s) parsed, {pou} POUs total. Files are sorted by score — the "
-                      "problematic ones on top."),
+    "batchrep.lead": ("{files} file(s) parsed, {pou} POUs total. Files are sorted by score, the problematic ones on top."),
     "batchrep.private_head": "Private mode ({plan}).",
     "batchrep.private_body": "The batch was processed in memory; nothing was written to statistics or logs.",
     "batchrep.tile_files": "files",
@@ -1235,8 +1376,7 @@ STRINGS = {
     "batchrep.th_top": "Top rules",
     "batchrep.none": "No file could be parsed as PLCopenXML.",
     "batchrep.errors": "Not parsed ({n}):",
-    "batchrep.detail_hint": ("Need a detailed breakdown of a specific file with suggested fixes — run it "
-                             "<a href=\"/\">one at a time</a> (there you can also save to profile and "
+    "batchrep.detail_hint": ("Need a detailed breakdown of a specific file with suggested fixes? Run it <a href=\"/\">one at a time</a> (there you can also save to profile and "
                              "issue a certificate)."),
 
     # --- profile ---
@@ -1244,7 +1384,7 @@ STRINGS = {
     "profile.lead": ("Saved reports are your verified code-quality track. The code is not stored, "
                      "only the aggregate."),
     "profile.check_more": "Check another file →",
-    "profile.plan_free": ("Plan: <strong>Free</strong> — certificates one by one, projects go into "
+    "profile.plan_free": ("Plan: <strong>Free</strong>: certificates one by one, projects go into "
                           "anonymized statistics."),
     "profile.upgrade_pro": "Upgrade to Pro →",
     "profile.plan_paid_head": "Plan:",
@@ -1261,7 +1401,7 @@ STRINGS = {
     "profile.tile_findings": "total findings",
     "profile.trend_h": "Quality trend (score)",
     "profile.trend_aria": "Score trend over {n} reports",
-    "profile.trend_hint": "The trend becomes meaningful after 3+ reports — the available points are shown now.",
+    "profile.trend_hint": "The trend becomes meaningful after 3+ reports; the available points are shown now.",
     "profile.rulefreq_h": "Rule frequency across all reports",
     "profile.api_h": "API for CI/CD",
     "profile.api_free": ("Run the linter in your pipeline and fail the build on quality thresholds. "
@@ -1269,18 +1409,16 @@ STRINGS = {
     "profile.api_key_active": "Key active",
     "profile.api_last_used": "last call {when}",
     "profile.api_never_used": "not used yet",
-    "profile.api_key_secret": "Keep it secret — it grants analysis access on your behalf.",
+    "profile.api_key_secret": "Keep it secret: it grants analysis access on your behalf.",
     "profile.api_reissue": "Reissue",
     "profile.api_reissue_confirm": "The old key will stop working. Generate a new one?",
     "profile.api_revoke": "revoke",
-    "profile.api_example": "Example: run an export and fail the build if score &lt; 70 or there are critical findings —",
-    "profile.api_body_note": ("Body — raw XML (<code>--data-binary</code>) or a multipart field "
+    "profile.api_example": "Example: run an export and fail the build if score &lt; 70 or there are critical findings:",
+    "profile.api_body_note": ("Body: raw XML (<code>--data-binary</code>) or a multipart field "
                               "<code>plcopen</code>. Thresholds (optional): <code>min_score</code>, "
-                              "<code>max_high</code>, <code>max_medium</code>. Response — a JSON report "
-                              "with a <code>gate.passed</code> field; <code>jq -e</code> returns a "
+                              "<code>max_high</code>, <code>max_medium</code>. Response: a JSON report with a <code>gate.passed</code> field; <code>jq -e</code> returns a "
                               "non-zero code on failure."),
-    "profile.api_create_note": ("Create a key to call <code>{url}</code> from CI. API analysis runs in "
-                                "private mode — projects are not logged."),
+    "profile.api_create_note": ("Create a key to call <code>{url}</code> from CI. API analysis runs in private mode: projects are not logged."),
     "profile.api_create": "Create API key",
     "profile.rep_version_na": "version n/a",
     "profile.rep_pou": "POUs",
@@ -1297,7 +1435,7 @@ STRINGS = {
     "rules.title": "Code standard · PLC Lint",
     "rules.h1": "Team code standard",
     "rules.lead": ("Tune the linter to your regulations: mute noisy rules and override severity. "
-                   "The standard applies to <strong>all</strong> your analyses — web, batch and API."),
+                   "The standard applies to <strong>all</strong> your analyses: web, batch and API."),
     "rules.now_custom": "· now: custom",
     "rules.now_default": "· now: default",
     "rules.save": "Save standard",
@@ -1316,18 +1454,18 @@ STRINGS = {
     "flash.login_to_use": "Log in to use this feature.",
     "flash.plan_required": "This feature is available on the {label} plan and above.",
     "flash.sub_done": "{label} subscription activated (demo, no payment).",
-    "flash.sub_cancelled": "Subscription cancelled — you're on the Free plan.",
-    "flash.ruleset_saved": "Code standard saved — applied to all your analyses (web, batch, API).",
+    "flash.sub_cancelled": "Subscription cancelled. You are on the Free plan.",
+    "flash.ruleset_saved": "Code standard saved; it applies to all your analyses (web, batch, API).",
     "flash.ruleset_reset": "Code standard reset to default values.",
-    "flash.api_created": "API key created. Copy it — it's shown in the 'API' section.",
+    "flash.api_created": "API key created. Copy it: it is shown in the 'API' section.",
     "flash.api_revoked": "API key revoked.",
-    "flash.claim_expired": "The report link expired — run the file again.",
+    "flash.claim_expired": "The report link expired; run the file again.",
     "flash.claim_bad": "Invalid report token.",
     "flash.claim_saved": "Report '{filename}' saved to profile (score {score}).",
     "flash.unlocked": "Export for '{filename}' unlocked.",
     "flash.account_created": "Account created.",
     "flash.logged_out": "You've logged out.",
-    "flash.pay_error": "Couldn't create a payment invoice — please try again later.",
+    "flash.pay_error": "Could not create a payment invoice; please try again later.",
     "err.no_file": "No file selected.",
     "err.empty_file": "The file is empty.",
     "err.parse_xml": ("Could not parse XML: {e}. A PLCopenXML export is required "
@@ -1338,13 +1476,149 @@ STRINGS = {
     "err.batch_parse": "not PLCopenXML / parse error",
     "err.batch_not_plcopen": "not a PLCopenXML export",
     "err.not_plcopen": ("The file is valid XML but not a PLCopenXML export (or contains a DTD). "
-                        "A project export is required: in CODESYS — Project → Export PLCopenXML "
+                        "A project export is required: in CODESYS: Project → Export PLCopenXML "
                         "(the root must be <project>). Please upload that file."),
     "err.bad_email": "Enter a valid e-mail.",
     "err.no_name": "Enter a display name.",
-    "err.short_password": "Password — at least 8 characters.",
+    "err.short_password": "Password: at least 8 characters.",
     "err.email_taken": "This e-mail is already registered.",
     "err.bad_login": "Wrong e-mail or password.",
+    # --- cause and effect matrix check (cause_effect.py) ---
+    "ce.title": "Cause and effect matrix vs PLC program",
+    "ce.legend": "✓ match · ! mismatch · i match, something to verify · ? tag not mapped · … not computed",
+    "ce.summary": "Mismatches: {n}.",
+    "ce.all_ok": "no mismatches",
+    "ce.details": "Cell by cell",
+    "ce.disclaimer": "Static check: the program was not executed on a PLC. Setpoints and delays "
+                     "held in variables may differ on the controller. Confirm every cell by "
+                     "simulation before start-up.",
+    "ce.unmapped_head": "Matrix tags without a mapping",
+    "ce.unmapped_hint": "Candidates are only suggested, not applied. Put the right ones into the "
+                        "mapping table (tag;variable) and run the check again.",
+    "ce.no_candidates": "no candidates",
+    "ce.latch_short": "latch",
+    "ce.status.ok": "match",
+    "ce.status.info": "match, something to verify",
+    "ce.status.mismatch": "mismatch",
+    "ce.status.unmapped": "tag not mapped",
+    "ce.status.not_computed": "not computed",
+    "ce.status.none": "no link, none in the matrix",
+    "ce.status.warning": "warning: linked in the graph, not confirmed by a test",
+    "ce.note.graph_link": "The dependency graph has a path: {path}. Tripping the cause alone did not confirm the influence (it may show with a combination of causes or in another mode): check.",
+    "ce.note.extra_no_path": "{var} changed during the trip, but the program has no path from the cause to it: this is output drift (timed logic, not settled), not the cause. Not a mismatch.",
+    "ce.note.graph_unsure": "The graph has no path, but the graph is incomplete (unparsed statements or library blocks): 'no link' is not claimed without a test.",
+    "ce.step.graph_no_path": "Dependency graph: no path from {set} to {var} ({cone} inputs in the cone of influence of {var}); no test needed",
+    "ce.path": "Path: {path}",
+    "ce.assert.head": "Spec assertions by type",
+    "ce.assert.summary": "Assertions: PASS {pass}, FAIL {fail}, ERROR {error} ({blocked} of them blocked by a failed one); graph warnings {warning}.",
+    "ce.assert.type.path_exists": "cause to effect path exists",
+    "ce.assert.type.no_path": "no extra link",
+    "ce.assert.type.path_through": "path goes through the given block",
+    "ce.assert.type.cone_of_influence": "cone of influence of the output",
+    "ce.assert.type.trips": "effect trips",
+    "ce.assert.type.setpoint": "setpoint",
+    "ce.assert.type.delay": "delay",
+    "ce.assert.type.voting": "voting",
+    "ce.assert.type.latch": "latch",
+    "ce.assert.type.bypass": "bypass",
+    "ce.class.missing": "In the matrix, not in the code",
+    "ce.class.extra": "In the code, not in the matrix",
+    "ce.class.setpoint": "Setpoint",
+    "ce.class.direction": "Direction",
+    "ce.class.delay": "Delay",
+    "ce.class.voting": "Voting",
+    "ce.class.action": "Action",
+    "ce.class.latch": "Latch",
+    "ce.class.bypass": "Bypass",
+    "ce.issue.missing.no_path": "The cause variable takes no part in driving this effect.",
+    "ce.issue.missing.no_effect": "The cause is in the effect logic but cannot drive it to the required state.",
+    "ce.issue.missing.effect_not_formed": "The effect output is never written by the program.",
+    "ce.issue.missing.not_forced": "The cause affects the effect but does not guarantee the required state: the result depends on the state the program was in (for example, the output stops being updated and freezes).",
+    "ce.issue.extra": "The program drives this effect on {cond}, but the matrix has no cell here.",
+    "ce.issue.setpoint": "Matrix {matrix}, code {code}.",
+    "ce.issue.setpoint_var": "Matrix {matrix}, code uses a variable with a different initial value: {code}. Check the actual value on the PLC.",
+    "ce.issue.direction": "Matrix {matrix}, code trips on {code}.",
+    "ce.issue.delay": "Matrix {matrix} s, code {code} s (fastest path).",
+    "ce.issue.voting": "Matrix {matrix}, code {code}.",
+    "ce.issue.action": "The cause drives the effect to the opposite state (output polarity).",
+    "ce.issue.latch_missing": "Latched in the matrix, but the code resets by itself once the cause clears.",
+    "ce.issue.latch_extra": "Not latched in the matrix, but the code holds until reset: {reset}.",
+    "ce.issue.bypass": "The trip is masked by a condition the matrix does not allow: {masks}.",
+    "ce.note.sp_var": "Setpoint in variable {var} (initial {init}): check the actual value on the PLC.",
+    "ce.note.sp_expr": "Setpoint is an expression {expr}: its value cannot be computed statically.",
+    "ce.note.delay_var": "Delay in variable {var} (initial {init} s): check the actual value on the PLC.",
+    "ce.note.delay_unknown": "Delay is an expression ({var}): its value cannot be computed statically.",
+    "ce.note.bypass_ok": "Bypass present and allowed by the matrix: {masks}.",
+    "ce.note.not_forced": "The trip is conditional: {when}.",
+    "ce.note.state_dependent": "The trip depends on the internal state of the program.",
+    "ce.note.too_complex": "The logic is too branched for an exact analysis.",
+    "ce.note.conditional": "The link acts only while cause {on} is in its tripped state (a process condition).",
+    "ce.note.shallow": "State carried between scans only for the variables closest to the cause.",
+    "ce.note.held_by_process": "After the cause clears it holds until a process value changes ({until}): this is control hysteresis, not a latch.",
+    "ce.note.one_scan": "Analysed within one scan: a one-scan lag is not taken into account.",
+    "ce.note.part_not_computed": "Part of the check was not computed (logic too branched): {what}.",
+    "ce.note.untraceable": "The link cannot be traced statically: the effect depends on computed values ({atoms}). Verify by simulation.",
+    "ce.action.stop": "stop", "ce.action.start": "start", "ce.action.close": "close",
+    "ce.action.open": "open", "ce.action.on": "on", "ce.action.off": "off",
+    "ce.col.tag": "Tag", "ce.col.desc": "Description", "ce.col.cond": "Condition",
+    "ce.col.delay": "Delay, s", "ce.col.voting": "Voting", "ce.col.cause": "Cause",
+    "ce.col.effect": "Effect", "ce.col.matrix": "In matrix", "ce.col.code": "In code",
+    "ce.col.issue": "Mismatch", "ce.col.note": "To verify", "ce.col.status": "Result",
+    # --- C&E check by scenario runs (ce_scenario.py) ---
+    "ce.disclaimer_sim": "Emulator check: the program was executed scan by scan on a computer, "
+                         "not on a PLC. Inputs outside the matrix were found by search, setpoints "
+                         "held in variables were taken from declarations and may differ on the "
+                         "controller. Run assumptions are listed below; confirm every cell on site "
+                         "before start-up.",
+    "ce.col.scenario": "Test run",
+    "ce.scenario_steps": "steps: {n}",
+    "ce.step.normal": "Normal: causes {causes}{chosen}{init}; {scans} scans of {dt} ms, {var} = {seen}",
+    "ce.step.chosen": ", chosen {x}",
+    "ce.step.init": ", initial state {x}",
+    "ce.step.normal_fail": "Normal: with the cause normal, after {scans} scans of {dt} ms {var} = {seen}, the effect is already in the required state",
+    "ce.step.inverse": "Inverted: {set}, {scans} scans, {var} = {seen} (normal)",
+    "ce.step.trip": "Trip: {set}, {scans} scans of {dt} ms, {var} = {seen}{t}",
+    "ce.step.trip_more": "With a larger margin: {set}, {scans} scans, {var} = {seen}{t}",
+    "ce.step.trip_all": "All channels: {set}, {scans} scans, {var} = {seen}{t}",
+    "ce.step.opposite": "Opposite value: {set}, {scans} scans, {var} = {seen}{t}",
+    "ce.step.t_yes": ", required state after {t} s",
+    "ce.step.t_no": ", required state never reached",
+    "ce.step.action": "From the required state ({pre}) applied {set}: {var} {moved}",
+    "ce.step.moved_yes": "left the required state",
+    "ce.step.moved_no": "did not move",
+    "ce.step.frozen": "Command {pre} while the cause is applied: {var} {frozen}",
+    "ce.step.frozen_yes": "does not respond, the output is frozen",
+    "ce.step.frozen_no": "responds",
+    "ce.step.threshold": "Boundary by behaviour: {lo} does not trip, {hi} trips ({probes} runs of {hold} s)",
+    "ce.step.voting": "Voting: {combos} channel combinations, tripped in {tripped}",
+    "ce.step.return": "Back to normal: {set}, {scans} scans of {dt} ms, {var} {held}",
+    "ce.step.held_yes": "holds",
+    "ce.step.held_no": "released after {t} s",
+    "ce.step.reset": "Reset: pulse {set} for 1 s{heur}, {scans} scans, {var} {released}",
+    "ce.step.heur": " (input found by name)",
+    "ce.step.released_yes": "reset",
+    "ce.step.released_no": "not reset",
+    "ce.step.mask": "{kind} {pre}, then {set}: the effect did not trip",
+    "ce.step.kind.bypass": "Bypass",
+    "ce.step.kind.declared": "Mode from the table",
+    "ce.step.kind.mode": "Mode (by name)",
+    "ce.step.never_written": "Variable {var} is never written by the program",
+    "ce.note.no_setpoint": "The analog cause has no setpoint: no test can be built.",
+    "ce.note.no_normal": "No operating state was found where {var} is out of the required state: the cell cannot be tested.",
+    "ce.note.normal_trips": "The effect already trips at {value}: the boundary is closer than normal.",
+    "ce.note.plant_idle": "The cause had no effect, but the plant is not operating ({effects} could not be started): the cause may act only in operation, so 'no link' is not claimed.",
+    "ce.note.voting_too_many": "More than six channels ({n}): combinations were not enumerated.",
+    "ce.note.reset_not_found": "Holds, but no reset releasing it was found: check how it is reset.",
+    "ce.note.mode_masks": "In mode {modes} the cell does not trip (mode found by name, only a suggestion): check whether this is allowed.",
+    "ce.assume.head": "Run assumptions",
+    "ce.assume.run": "Scan {dt} ms; normal state settled for {settle} s at {sdt} ms; normal state search: {n} runs.",
+    "ce.assume.normal": "Causes at normal: {x}.",
+    "ce.assume.chosen": "Chosen for the normal state (inputs outside the matrix): {x}.",
+    "ce.assume.init": "Initial memory state: {x}.",
+    "ce.assume.skipped": "Not executed (unknown functions, libraries, methods): {n} places, variables kept their previous value.",
+    "ce.assume.reset": "No reset in the matrix, an input found by name was applied: {x}.",
+    "ce.assume.modes": "Look like modes (only a suggestion): {x}.",
+    "ce.assume.extra": "'In the code, not in the matrix' is searched by tripping each cause alone from the normal state; links visible only with a combination of causes or in another mode are not caught this way.",
 },
 }
 
@@ -1375,6 +1649,13 @@ ACCEPTANCE_Q = {
     "always-false-condition": "Есть условия, которые после подстановки значений этого же скана не выполняются никогда ({n}). Что должно было происходить по этим условиям?",
     "signal-without-source": "Сигнал аварии читается в условиях, но его никто не формирует ({n}). Откуда он должен приходить — не дошла привязка или проверка написана «на будущее»?",
     "unsigned-vs-zero": "Беззнаковая переменная сравнивается с нулём так, что результат известен заранее ({n}). Эта защита должна была работать?",
+    "write-series-outlier": "В серии однотипных записей несколько строк пишут в другой буфер, ровно в дыру нумерации основного ({n}). Эти значения должны были уйти туда же, куда и соседние?",
+    "array-write-overlap": "Одни и те же ячейки общего массива пишут два разных POU, один из них через указатель ({n}). Какое значение должно оказаться в этих регистрах?",
+    "param-family-outlier": "В вызове блока один параметр получает настройку соседнего узла, хотя своя такая же настройка в проекте есть ({n}). Узлы действительно должны делить эту величину?",
+    "output-stuck-outside-modes": "Есть цепочки режимов без ветви «прочее», где выход ведут в каждой ветви и нигде не сбрасывают ({n}). Что должно происходить с выходом при отказе датчика или в положении «ОТКЛ»?",
+    "for-unsigned-minus-one": "Есть циклы до `X - 1` с беззнаковым X без проверки на ноль ({n}). Что произойдёт, если это значение окажется нулём, например после замены контроллера?",
+    "buffer-window-overrun": "Блоку обмена передано начало буфера со сдвигом, а размер целиком ({n}). Какой последний регистр читает и пишет мастер, и что лежит за массивом?",
+    "heating-dhw-fault-opens": "При отказе датчика клапан контура ГВС ведётся на открытие ({n}). Это безопасное положение для этого контура, или логика скопирована с отопления?",
     "channel-sensor-off": "У канала, заведённого на переменную, не выбран тип датчика ({n}). Этот вход действительно не используется?",
     "channel-output-off": "У выхода, привязанного к переменной, не выбран тип сигнала ({n}). Чем тогда управляет эта переменная?",
     "module-disabled": "Модуль исключён из опроса ({n}). Это осознанно — или осталось с наладки?",
@@ -1412,7 +1693,7 @@ ACCEPTANCE_Q = {
     "uncalled-timer": "A timer is declared and its output is used, but the timer itself is never started ({n}). Does the delay actually work here?",
     "div-by-zero": "A division where the divisor can be zero ({n}). What happens to the controller if that occurs on site?",
     "cfc-div-zero": "The diagram has a division with zero on the divisor input ({n}). Is that deliberate?",
-    "family-gap": "For one channel in a group a field is declared but never written in code ({n}). How does that channel get its value — or is the block unfinished?",
+    "family-gap": "For one channel in a group a field is declared but never written in code ({n}). How does that channel get its value, or is the block unfinished?",
     "param-channel-mismatch": "In a block call one channel's parameter is fed from another channel ({n}). Is that a deliberate cross-link or a leftover from copying?",
     "index-mismatch": "A line indexes differently from the rest of its group ({n}). Is that a project-specific exception?",
     "self-enable": "A start command is derived from an output that, within the same scan, depends on this equipment's own feedback ({n}). How does the loop start from standstill?",
@@ -1423,8 +1704,15 @@ ACCEPTANCE_Q = {
     "edge-lost-in-own-branch": "An edge detector is only called inside a branch that requires its own input ({n}). How many times is it meant to fire over a series of events?",
     "fb-preset-missing": "The instance has no preset set anywhere ({n}). What delay was intended here?",
     "always-false-condition": "Some conditions never hold once same-scan assignments are substituted ({n}). What was supposed to happen on those conditions?",
-    "signal-without-source": "An alarm signal is read in conditions but nothing ever sets it ({n}). Where should it come from — a missing binding, or a check written for later?",
+    "signal-without-source": "An alarm signal is read in conditions but nothing ever sets it ({n}). Where should it come from: a missing binding, or a check written for later?",
     "unsigned-vs-zero": "An unsigned variable is compared against zero so that the outcome is known in advance ({n}). Was that guard supposed to work?",
+    "write-series-outlier": "In a series of uniform writes, some lines go to another buffer, exactly into a hole of the main buffer's numbering ({n}). Were these values meant to go where their neighbours go?",
+    "array-write-overlap": "The same cells of a shared array are written by two different POUs, one of them through a pointer ({n}). Which value is supposed to end up in those registers?",
+    "param-family-outlier": "In a block call one parameter receives a neighbouring unit's setting although the unit's own setting of the same kind exists ({n}). Are the units really meant to share it?",
+    "output-stuck-outside-modes": "There are mode chains with no fallback branch where an output is driven in every branch and never reset ({n}). What should the output do on a sensor fault or with the selector at OFF?",
+    "for-unsigned-minus-one": "There are loops up to `X - 1` with an unsigned X and no zero check ({n}). What happens if that value turns out to be zero, for instance after a controller replacement?",
+    "buffer-window-overrun": "An exchange block gets a shifted buffer start but the full size ({n}). Which is the last register the master reads and writes, and what lies past the array?",
+    "heating-dhw-fault-opens": "On a sensor fault the DHW circuit valve is driven open ({n}). Is that the safe position for this circuit, or was the logic copied from heating?",
     "channel-sensor-off": "A channel wired to a variable has no sensor type selected ({n}). Is that input really unused?",
     "channel-output-off": "An output bound to a variable has no signal type selected ({n}). What does that variable actually drive?",
     "module-disabled": "A module is excluded from polling ({n}). Deliberate, or left over from commissioning?",
@@ -1446,7 +1734,7 @@ ACCEPTANCE_Q = {
     "empty-branch": "Empty conditional branches ({n}). Unfinished logic, or a leftover construct?",
     "dead-pou": "Program blocks nothing ever calls ({n}). Leftovers from earlier versions, or a renamed call?",
     "unused-local": "Variables declared but never used ({n}). Leftovers from removed logic?",
-    "copy-paste": "Similar logic blocks multiplied by copy-paste ({n}). Every future fix will have to be made in all of them — is that intended?",
+    "copy-paste": "Similar logic blocks multiplied by copy-paste ({n}). Every future fix will have to be made in all of them. Is that intended?",
     "routine-size": "Very long blocks ({n}). Who maintains them after handover?",
     "deep-nesting": "Deeply nested conditions ({n}). Is the logic readable while troubleshooting an alarm?",
     "missing-comments": "Blocks with substantial logic and not a single comment ({n}). How will staff understand them in six months?",
@@ -1515,6 +1803,13 @@ RULE_SHORT = {
     "always-false-condition": "`NOT X AND X` после подстановки: строка в журнале есть, защиты нет",
     "signal-without-source": "блокировка читает сигнал, который навсегда остаётся в нуле",
     "unsigned-vs-zero": "`cnt : UINT`, а в коде `IF cnt < 0` — ветвь никогда не исполняется",
+    "write-series-outlier": "шесть строк `F(x, ADR(A[k]))`, а седьмая пишет в `B[k]` ровно в дыру нумерации A",
+    "array-write-overlap": "функция через ADR кладёт по два слова и затирает регистры, выставленные другим POU",
+    "param-family-outlier": "остальные аргументы вызова — `cfg.valve*`, а время хода передано `cfg.burnerStroke`",
+    "output-stuck-outside-modes": "`IF АВТ … ELSIF РУЧН … END_IF` без ELSE: при отказе датчика реле остаётся под током",
+    "for-unsigned-minus-one": "`FOR i := 1 TO n - 1` при `n : WORD` и n = 0 даёт 65535 проходов за скан",
+    "buffer-window-overrun": "`pBuffer := ADR(a) + 2, BufSize := SIZEOF(a)`: последний регистр Modbus смотрит за массив",
+    "heating-dhw-fault-opens": "копия логики отопления: «открыть до конца» безопасно там, но не для бойлера горячей воды (профиль heating)",
     "channel-sensor-off": "канал не оцифровывается, а ноль на улице выглядит правдоподобно (.export)",
     "channel-output-off": "команда уходит в никуда, механизм стоит на месте (.export)",
     "module-disabled": "все сигналы мертвы, программа живёт на старых значениях (.export)",
@@ -1545,18 +1840,18 @@ RULE_SHORT = {
 },
 "en": {
     "array-bounds": "reaching the line reads memory that isn't yours",
-    "infinite-loop": "WHILE TRUE with no exit — the scan stalls",
+    "infinite-loop": "WHILE TRUE with no exit stalls the scan",
     "div-by-zero": "literal <code>/0</code> and an unguarded divisor variable",
     "cfc-div-zero": "in CFC the block divisor is wired to a literal 0",
     "broken-implicit-check": "a Check function exists but its guard is gutted",
     "modbus-address-duplicate": "which of the two answers the poll?",
     "uncalled-timer": "TON/TP/R_TRIG read, but the FB is never called",
-    "unreachable-branch": "dead ELSIF — the classic heating-curve bug",
+    "unreachable-branch": "dead ELSIF: the classic heating-curve bug",
     "undeclared-global": "references to globals not declared in the GVL",
     "family-gap": "declared for all four boilers, written for three",
     "param-channel-mismatch": "pump 1's alarm arrives on pump 2's input",
     "self-enable": "stopped → no permission → no command → stopped",
-    "timer-reset-by-own-condition": "the pause lasts one task cycle — the timer input is dropped below",
+    "timer-reset-by-own-condition": "the timer input is dropped below, so the pause lasts one task cycle",
     "timer-rearmed-by-own-branch": "the equipment is never released: the TOF input is re-armed in the same branch",
     "timer-off-delay-in-own-branch": "the TOF is only called while its input is up, so it never counts",
     "fb-call-overwritten": "one instance is called twice in a row with different inputs",
@@ -1564,25 +1859,32 @@ RULE_SHORT = {
     "fb-preset-missing": "the preset (PT on a timer, PV on a counter) is set nowhere",
     "always-false-condition": "`NOT X AND X` after substitution: listed in the log, no protection",
     "signal-without-source": "an interlock reads a flag that stays at zero forever",
-    "unsigned-vs-zero": "`cnt : UINT` with `IF cnt < 0` — a branch that can never run",
+    "unsigned-vs-zero": "`cnt : UINT` with `IF cnt < 0`: a branch that can never run",
+    "write-series-outlier": "six lines `F(x, ADR(A[k]))` and a seventh into `B[k]`, right where A's numbering has a hole",
+    "array-write-overlap": "a function given ADR() stores two words and overwrites registers set elsewhere",
+    "param-family-outlier": "every other argument is `cfg.valve*`, yet the stroke time comes from `cfg.burnerStroke`",
+    "output-stuck-outside-modes": "`IF AUTO … ELSIF MANUAL … END_IF` with no ELSE: on a sensor fault the relay stays energised",
+    "for-unsigned-minus-one": "`FOR i := 1 TO n - 1` with `n : WORD` and n = 0 means 65535 passes per scan",
+    "buffer-window-overrun": "`pBuffer := ADR(a) + 2, BufSize := SIZEOF(a)`: the last Modbus register points past the array",
+    "heating-dhw-fault-opens": "copied heating logic: driving fully open is safe there, not for a hot-water heater (heating profile)",
     "channel-sensor-off": "the reading stays at zero, and zero outdoors looks plausible (.export)",
     "channel-output-off": "the command goes nowhere and the actuator never moves (.export)",
     "module-disabled": "every signal is dead while the program keeps stale values (.export)",
     "visu-two-labels": "\"pump 2\" shows pump 1: an element copied with a foreign binding (.export)",
-    "visu-index-mismatch": "\"Boiler 3\" next to alarm_kotel[2] — a copy-paste trace (.export)",
+    "visu-index-mismatch": "\"Boiler 3\" next to alarm_kotel[2]: a copy-paste trace (.export)",
     "heating-ai-no-range-check": "a broken Pt1000 reaches the controller as a solid 0 °C (profile)",
-    "int-division": "<code>5/2</code> yields 2 — the fraction is dropped",
+    "int-division": "<code>5/2</code> yields 2, the fraction is dropped",
     "real-to-time-mul": "a fractional time setpoint is lost before conversion",
     "real-to-word-mul": "the product overflows 0..65535",
     "missing-implicit-checks": "the runtime will not intercept a bad index or /0",
     "implicit-check-disabled": "the check exists but is not registered",
     "watchdog-disabled": "the task watchdog is switched off",
-    "timer-zero-pt": "<code>PT := T#0S</code> — effectively no delay",
+    "timer-zero-pt": "<code>PT := T#0S</code> means effectively no delay",
     "case-without-else": "unhandled selector values",
-    "self-assignment": "<code>x := x</code> — a typo or lost logic",
+    "self-assignment": "<code>x := x</code>: a typo or lost logic",
     "empty-branch": "logic forgotten in an IF or a loop",
     "index-mismatch": "eleven lines write to their own channel, the twelfth does not",
-    "dead-pou": "leftovers — or a rename someone forgot to finish",
+    "dead-pou": "leftovers, or a rename someone forgot to finish",
     "magic-number": "raw constants in logic, with no name",
     "naming": "cryptic single-character names",
     "missing-comments": "nothing explains the logic to the next engineer",
@@ -1633,12 +1935,19 @@ RULE_HELP = {
     "timer-reset-by-own-condition": "Таймер считает по переменной, которую ниже в той же ветви гасят на всех путях. Скан N: вход TRUE, отсчёт пошёл, переменную сбросили. Скан N+1: вход уже FALSE, таймер обнулён вместе с накопленным временем, а условие, которое ждало выдержки, открыто. Пауза живёт один цикл задачи вместо уставки — на боевом объекте это 0,01 с при заданных 30 с. Код компилируется, читается как правильный, уставка есть на экране, оператор её крутит, и она ни на что не влияет. Правило смотрит дерево ветвей, а не соседство строк: сброс под условием (`IF T.Q THEN V := FALSE`) — это штатный одновыстрел, таймер успевает отсчитать выдержку, и такой код правило не трогает.",
     "timer-rearmed-by-own-branch": "Зеркальный случай к предыдущему, и по последствиям он хуже. Задержка выключения (TOF) отсчитывает, пока вход держится FALSE: сняли команду — выдержка пошла — через уставку выход погас. Если ниже в той же ветви вход на всех путях снова взводят в TRUE, отсчёт каждый скан начинается заново, выход не гаснет никогда, и оборудование не останавливается: насос с выбегом крутится, продувка не кончается, вентилятор не выключается. У задержки включения дефект отнимает выдержку, здесь — отнимает само выключение. Правило различает тип таймера: для TON дефект — гашение входа, для TOF — его повторное взведение, а TP и BLINK не трогает вовсе, потому что у них вход работает как фронт и к выдержке отношения не имеет.",
     "timer-off-delay-in-own-branch": "Задержка выключения отсчитывает время, пока вход СНЯТ: сняли команду — пошла выдержка — через уставку выход погас. Если таймер вызывают только внутри ветви, условие которой требует этот же вход, то в момент снятия команды ветвь не исполняется, вызова нет, и накопленное время стоит на нуле. Выдержка не кончается никогда, оборудование не выключается. Для задержки включения тот же код безупречен: она и должна считать, пока условие истинно, — поэтому правило смотрит только на TOF и TONOF. Найдено перебором сочетаний и проверено эмулятором скана: накопленное время осталось нулевым при всех опробованных поведениях входов.",
-    "fb-call-overwritten": "Экземпляр ФБ с памятью — таймер или детектор фронта — хранит одно состояние. Два вызова подряд в одной ветви с разными входами означают, что до таймера доходит только последний: первый вызов не успевает ни на что повлиять, хотя в коде выглядит рабочим. Вызовы во ВЗАИМОИСКЛЮЧАЮЩИХ ветвях — приём законный: в одной ветви таймер пускают, в другой сбрасывают через `IN := FALSE`. На нашем корпусе такой приём встретился семь раз, и правило его не трогает; оно срабатывает только когда оба вызова стоят на одном пути и исполняются в одном скане.",
+    "fb-call-overwritten": "Экземпляр ФБ с памятью — таймер или детектор фронта — хранит одно состояние. Два вызова подряд в одной ветви с разными входами означают, что в одном скане таймер видит смену входа, которой в процессе не было: состояние после первого вызова тут же перезаписывает второй, и в коде это выглядит как два рабочих вызова. Два законных приёма правило не трогает. Вызовы во ВЗАИМОИСКЛЮЧАЮЩИХ ветвях: в одной ветви таймер пускают, в другой сбрасывают через `IN := FALSE` (на нашем корпусе встретилось семь раз). И перезапуск в одном скане: `t(IN := FALSE); t(IN := TRUE, PT := …);` — первый вызов обнуляет ET и Q, второй начинает отсчёт заново. Правило срабатывает только когда оба вызова стоят на одном пути, исполняются в одном скане и первый из них не сброс.",
     "edge-lost-in-own-branch": "Вход по фронту — у R_TRIG, F_TRIG и у счётного входа CTU/CTUD — сравнивается с тем, что ФБ видел в прошлый свой вызов. Если его вызывают только внутри ветви, условие которой требует этот же вход, снятия входа он не застаёт: ветвь в этот момент не исполняется. Внутренняя память остаётся взведённой, и каждый следующий подъём фронтом уже не считается. Замер на эмуляторе скана: детектор дал одно срабатывание на десять переходов, счётчик CTU насчитал 1 при уставке 5. Коварство в том, что ПЕРВЫЙ фронт проходит нормально, поэтому при проверке на объекте «нажали — сработало» дефект не виден, он всплывает со второго раза.",
     "fb-preset-missing": "Уставку таймера (PT) или счётчика (PV) можно задать тремя способами: аргументом вызова, присваиванием в поле `t.PT := …` или начальным значением в объявлении. Если её нет нигде, PT остаётся нулевым, и выход появляется в том же скане, в котором подняли вход. Код при этом выглядит правильным: вызов есть, выход читают, выдержки нет. От правила `timer-zero-pt` отличается тем, что там ноль написан явно, а здесь уставку просто забыли — и заметить это глазами труднее.",
     "always-false-condition": "Условие, которое после подстановки присваиваний этого же скана оказывается тождественно ложным (или тождественно истинным). Классика: одна программа формирует команду от датчика, другая проверяет аварию «команда есть, а датчика нет» — и после подстановки выходит `NOT X AND X`, то есть FALSE при любом X. Авария физически не может сработать: строка в журнале есть, защиты нет. Глазами это не ловится, потому что присваивание и проверка лежат в разных POU, а между ними — порядок вызова из PLC_PRG. Правило подставляет только то, что в этом скане известно точно: присваивание должно покрывать все пути исполнения, а программа-источник — вызываться раньше. Если переменной присвоено в нескольких ветвях, подставляется каждое значение, и правило срабатывает лишь когда константа выходит при всех.",
     "signal-without-source": "Булев сигнал состояния (авария, ошибка, неисправность) читается в условиях программы, но ни одна строка кода и ни один канал модуля его не записывают. Значит он навсегда остаётся в нуле: блокировка по аварии не сработает ни разу, лампа на мнемосхеме не загорится, в журнале останется мёртвая строка. На объекте такое выглядит как исправная защита — именно потому, что она не срабатывает. Типичная причина: сигнал ждали снаружи (его должны были завести электрики, или опрос по шине так и не дописали), а условие в коде уже стоит. Правило намеренно смотрит только на имена аварий и только на булевы: команды и уставки законно пишутся с экрана визуализации, а показания датчиков — прямо с канала, и в экспорте PLCopenXML ни того, ни другого не видно. Всё, что привязано к каналу в дереве устройств или упомянуто в графическом теле, правило не трогает.",
     "unsigned-vs-zero": "Беззнаковая переменная (UINT, UDINT, WORD, BYTE и подобные) сравнивается с нулём так, что ответ известен заранее: `x < 0` не бывает истинным, `x >= 0` не бывает ложным. Компилятор на это не жалуется, ветвь компилируется и никогда не исполняется. Чаще всего это не стиль, а след неверно выбранного типа: защиту от отрицательного значения написали осознанно, а тип её молча отменил — и там, где ожидался зажим в ноль, остаётся переполнение по кругу (0 − 1 у UINT даёт 65535). Отдельно опасен вариант `x >= 0` в условии аварии: оно выполняется всегда, и авария висит постоянно либо, наоборот, маскирует настоящую.",
+    "write-series-outlier": "Блок однотипных записей в буфер обмена (`Real2word(x, ADR(wData[93]))`, `wData[95] := …`) обычно набирают копированием соседнего блока. Правило ищет в такой серии записи той же формы, которые уходят в ДРУГОЙ буфер, причём их номера лежат ровно в дыре нумерации основного: у основного буфера номера обрываются перед ними и продолжаются после. Это след строк, скопированных без замены имени буфера. Последствия двойные: в основном буфере эти ячейки не заполняются никогда (получатель видит нули), а в чужом буфере затираются значения, которые туда пишет кто-то другой. Компилятор и проверка границ здесь молчат: оба массива объявлены, индексы законные.",
+    "array-write-overlap": "Общий массив обмена (регистры панели, Modbus, АСУ ТП) заполняют несколько POU, каждый свою часть. Правило складывает ячейки, которые каждый POU пишет по литеральному индексу, и ищет пересечения между разными POU. Учитывается ширина записи через указатель: если функции передают `ADR(A[k])` сериями с шагом 2, она пишет два слова, и `A[k+1]` тоже занята. Прямые записи `A[k] :=` из двух POU сами по себе не находка (так пишут осознанно: инициализация и работа, разные режимы), поэтому в пересечении обязательно участвует запись через указатель. Чем грозит: кто выполнится позже в скане, тот и победит, и значение другого POU до получателя не доходит; на экране мусор вместо выходов или времени работы.",
+    "param-family-outlier": "Вызов блока управления узлом получает настройки этого узла одним семейством: `Cfg.rValvePeriod`, `Cfg.rValveMinMove`, `Cfg.rValveMaxMove`. Правило ищет вызов, где один аргумент взят из соседнего семейства (`Cfg.rBurnerFullMove`), хотя величина своего семейства с тем же хвостом в проекте существует (`Cfg.rValveFullMove`). Это след копирования из соседнего узла. Опасен он тем, что не виден при наладке: по умолчанию обе уставки часто равны, и всё работает. Дефект проявится, только когда одну из них поменяют, и тогда модель положения, выдержка или защита этого узла начнут считаться по чужой настройке. Номера каналов правило не сравнивает: перепутанный номер ловит param-channel-mismatch.",
+    "output-stuck-outside-modes": "Управление узлом часто пишут цепочкой по режимам: `IF датчик исправен AND АВТ THEN … ELSIF РУЧН THEN … END_IF`. Дискретный выход (открыть/закрыть, пуск) включают и выключают внутри каждой ветви. Если ветви «прочее» нет и вне цепочки выход никто не трогает, то в состоянии, которое не попало ни в одну ветвь (отказ датчика, положение переключателя «ОТКЛ», связь пропала), выход сохраняет значение прошлого скана. Если в этот момент шла команда «открыть», реле остаётся под током до концевика, а программная оценка положения перестаёт обновляться. Правило не трогает триггеры «установить/сбросить» (ветвь только ставит или только снимает выход: там хранить состояние и задумано) и цепочки, условия которых покрывают все сочетания.",
+    "for-unsigned-minus-one": "Верхняя граница цикла `X - 1` у беззнакового X (UINT, WORD, UDINT, DWORD и подобных) не бывает отрицательной: при X = 0 вычитание переворачивается через ноль и даёт максимум типа, 65535 у WORD. Цикл, который должен был не выполниться ни разу, проходит десятки тысяч раз за скан: время цикла вылетает за сторожевой таймер, а если счётчик индексирует массив, чтение и запись уходят далеко за его границы (без CheckBounds это порча соседней памяти). Правило молчит, если X — константа или где-то в проекте есть проверка `X > 0`, `X >= 1`, `X <> 0`, `X = 0` или зажим `X := MAX(…)`/`LIMIT(…)`. Чаще всего X — число узлов, введённое с панели: при пусконаладке и замене контроллера ноль там самое вероятное значение.",
+    "buffer-window-overrun": "Блоку обмена (Modbus-слейв, порт, файловая запись) передают начало области и её размер. Если начало сдвинуто (`ADR(a) + 2` или `ADR(a[k])` при k больше нижней границы), а размер оставлен целым `SIZEOF(a)`, окно выходит за конец массива ровно на величину сдвига. Чтение последних регистров отдаёт содержимое соседней переменной, а запись мастером (функции 6/16 Modbus) её портит, и где именно, зависит от того, как компоновщик разложил память. Компилятор это не ловит: оба аргумента законны по типу. Ошибка обычно появляется, когда номер первого регистра сдвигают под карту панели, а размер забывают.",
+    "heating-dhw-fault-opens": "В ветви отказа датчика (или «не АВТ») программа должна вести исполнительный механизм в безопасное положение, а безопасное положение зависит от контура. Для отопления «открыть до конца» обычно правильно: дом не заморозить. Для ГВС открытый клапан греющей воды означает максимум тепла в теплообменник без регулирования: перегрев воды у потребителя и риск ожога. Правило смотрит только на контур ГВС, и только по явным признакам: ГВС/GVS/DHW в имени POU или выхода. В ветви, которая выполняется при отказе датчика (`IF NOT авария … ELSE` или `IF авария THEN`), оно ищет установку выхода «открыть» в TRUE. Без явных признаков контура правило молчит. Решение, куда безопасно, остаётся за технологом: находка — вопрос, а не приговор.",
     "channel-sensor-off": "Канал модуля заведён на переменную IEC, но тип датчика на нём не выбран («Отключен»). Канал не оцифровывается: переменная остаётся нулём при любом сигнале на входе. Беда в том, что ноль правдоподобен — для наружной температуры это «на улице 0 °C», и погодозависимый график сразу считает не ту уставку, а наладчик ищет ошибку в коде. В ST этого не видно вообще: там переменная объявлена и читается как обычно, настройка живёт в «Параметрах устройства». Свободных входов у модуля обычно больше, чем занятых, и для них «Отключен» — правильная настройка, поэтому правило смотрит только на каналы, чьё ЗНАЧЕНИЕ заведено на переменную (код статуса вешают и на свободные входы, по нему все входы выглядели бы занятыми).",
     "channel-output-off": "Выход модуля привязан к переменной, но тип выходного сигнала не выбран. Программа пишет в переменную, значение доходит до канала и там останавливается: ЦАП не формирует ни 4…20 мА, ни 0…10 В. Снаружи это выглядит как неисправный исполнительный механизм — клапан не двигается, привод не реагирует, а в программе всё правильно.",
     "module-disabled": "У модуля стоит признак «исключить из опроса». Контроллер его не опрашивает совсем: входы не обновляются, выходы не выставляются, все связанные переменные остаются с теми значениями, что были на момент отключения. Признак обычно ставят на наладке, чтобы убрать ошибку по отсутствующему модулю, и забывают снять — тогда целый шкаф сигналов тихо мёртв, а программа работает со старыми значениями и не жалуется.",
@@ -1653,54 +1962,61 @@ RULE_HELP = {
     "cfc-div-zero": "В графике (CFC/FBD) делитель блока DIV/MOD подключён к литеральной константе 0 — рантайм-исключение при исполнении блока. Проверяется по графу связей.",
 },
 "en": {
-    "undeclared-global": "A gvl.<name> reference has no declaration in the GVL — almost always a typo; the variable is silently created or the code won't compile.",
-    "unreachable-branch": "IF x<T … ELSIF x>=T … — the second branch covers the whole remaining range, so the following ELSIF branches never execute (a classic weather-curve mistake).",
-    "uncalled-timer": "A timer/trigger instance is read (.Q/.ET) or written (.IN), but the FB itself is never called name(...) — it never ticks, the output stays in its initial state.",
+    "undeclared-global": "A gvl.<name> reference has no declaration in the GVL, almost always a typo; the variable is silently created or the code won't compile.",
+    "unreachable-branch": "IF x<T … ELSIF x>=T …: the second branch covers the whole remaining range, so the following ELSIF branches never execute (a classic weather-curve mistake).",
+    "uncalled-timer": "A timer/trigger instance is read (.Q/.ET) or written (.IN), but the FB itself is never called name(...), so it never ticks, the output stays in its initial state.",
     "int-division": "Dividing an integer by an integer constant drops the fraction. Use /N.0 or *_TO_REAL if precision matters.",
-    "real-to-time-mul": "REAL_TO_TIME treats the number as milliseconds and truncates the fraction before conversion — fractional time setpoints are lost. Multiply before REAL_TO_TIME.",
-    "real-to-word-mul": "WORD is limited to 0..65535 — make sure the product doesn't overflow.",
-    "double-semicolon": "A stray empty statement `;;` — harmless, but a trace of a sloppy edit.",
-    "dead-pou": "The POU is never called and never used as a type — dead code or a forgotten name change (check against the spec before deleting).",
-    "div-by-zero": "Division or MOD by a literal zero — a guaranteed runtime exception (division by zero) whenever this line is reached.",
-    "array-bounds": "A constant index falls outside the declared ARRAY[lo..hi] bounds — reaching this line reads/writes memory that isn't yours. Without active implicit checks the runtime won't intercept it. Checked for one-dimensional arrays with numeric bounds and a literal index.",
-    "infinite-loop": "WHILE TRUE / REPEAT … UNTIL FALSE with no EXIT or RETURN inside — the scan never finishes: the task blocks and the watchdog fires (and if the watchdog is off, the controller stalls). In a PLC, long processing is spread across scans, not spun in a loop.",
-    "broken-implicit-check": "An implicit check function (Check…) exists, but its protective logic is gutted: an empty body, or the check (divisor=0 / bounds) removed. The runtime calls it, but it catches nothing — a false sense of safety, more dangerous than its absence.",
-    "modbus-address-duplicate": "Two or more modules are assigned the same Modbus address (IP:port#unit) — a conflict on the bus: their exchange will be incorrect. Checked against leaf I/O modules.",
-    "watchdog-disabled": "A cyclic task has its watchdog disabled. If the scan overruns or hangs (e.g. a long cycle), the controller won't restart the task automatically — especially important for the main control task.",
-    "implicit-check-disabled": "A check function exists in the project but is not active: either not registered (no CheckFunction tag — the runtime never calls it), or an entire category (bounds/division/range/pointers) has no active check.",
-    "missing-implicit-checks": "The project has no implicit check functions (CheckBounds, CheckDivReal, CheckRange…, CheckPointer). They are added manually; without them the runtime does NOT intercept array-bounds overruns, division by zero, etc. — instead of graceful handling you get an exception or memory corruption.",
-    "timer-zero-pt": "PT is set to zero (T#0S) — the timer fires in the same scan, effectively no delay. Usually a forgotten or wrong time setpoint.",
-    "case-without-else": "CASE without an ELSE branch: if the selector takes a value not among the labels, nothing runs — a silent skip (a common state-machine bug).",
+    "real-to-time-mul": "REAL_TO_TIME treats the number as milliseconds and truncates the fraction before conversion, so fractional time setpoints are lost. Multiply before REAL_TO_TIME.",
+    "real-to-word-mul": "WORD is limited to 0..65535, so make sure the product does not overflow.",
+    "double-semicolon": "A stray empty statement `;;` is harmless, but a trace of a sloppy edit.",
+    "dead-pou": "The POU is never called and never used as a type: dead code, or a forgotten name change (check against the spec before deleting).",
+    "div-by-zero": "Division or MOD by a literal zero is a guaranteed runtime exception (division by zero) whenever this line is reached.",
+    "array-bounds": "A constant index falls outside the declared ARRAY[lo..hi] bounds, so reaching this line reads or writes memory that isn't yours. Without active implicit checks the runtime won't intercept it. Checked for one-dimensional arrays with numeric bounds and a literal index.",
+    "infinite-loop": "WHILE TRUE / REPEAT … UNTIL FALSE with no EXIT or RETURN inside: the scan never finishes: the task blocks and the watchdog fires (and if the watchdog is off, the controller stalls). In a PLC, long processing is spread across scans, not spun in a loop.",
+    "broken-implicit-check": "An implicit check function (Check…) exists, but its protective logic is gutted: an empty body, or the check (divisor=0 / bounds) removed. The runtime calls it, but it catches nothing, which is a false sense of safety, more dangerous than its absence.",
+    "modbus-address-duplicate": "Two or more modules are assigned the same Modbus address (IP:port#unit), which is a conflict on the bus: their exchange will be incorrect. Checked against leaf I/O modules.",
+    "watchdog-disabled": "A cyclic task has its watchdog disabled. If the scan overruns or hangs (e.g. a long cycle), the controller won't restart the task automatically. This matters most for the main control task.",
+    "implicit-check-disabled": "A check function exists in the project but is not active: either not registered (no CheckFunction tag, so the runtime never calls it), or an entire category (bounds/division/range/pointers) has no active check.",
+    "missing-implicit-checks": "The project has no implicit check functions (CheckBounds, CheckDivReal, CheckRange…, CheckPointer). They are added manually; without them the runtime does NOT intercept array-bounds overruns, division by zero and the like. Instead of graceful handling you get an exception or memory corruption.",
+    "timer-zero-pt": "PT is set to zero (T#0S), so the timer fires in the same scan, effectively no delay. Usually a forgotten or wrong time setpoint.",
+    "case-without-else": "CASE without an ELSE branch: if the selector takes a value not among the labels, nothing runs: a silent skip (a common state-machine bug).",
     "deep-nesting": "Deeply nested IFs are hard to read and easy to get wrong. A sign the block should be simplified (early exits, guards) or part of it extracted into a separate FB/method.",
-    "self-assignment": "A line like `x := x;` — assigning a variable to itself does nothing. Usually a typo on the right-hand side (another variable was meant) or a leftover from deleted logic.",
-    "empty-branch": "An IF/ELSIF/ELSE branch or a loop body is empty (`THEN END_IF`, `DO END_FOR`) — the logic was either never written or cut out during an edit and the construct left behind.",
-    "unused-local": "A local variable is declared in VAR but never appears in the POU body or its actions/methods — a leftover from deleted logic, or a typo in the body (in which case a different variable is doing the work).",
-    "heating-ai-no-range-check": "A value coming from an analog input (or a raw register) is never compared against a range anywhere in the project. On a broken or shorted sensor the input returns an extreme value and it travels into the controller as valid data: a broken Pt1000 reads as 0 °C and the valve opens fully. Inputs are taken from the device tree (nothing assigns them in code — the runtime does). A check means either a range comparison anywhere in the project or a read of the module's own channel error code (`error_analog_code` and the like) — the latter is in fact stronger: a broken or shorted sensor is caught by the hardware. If plausibility is handled in a way static analysis cannot see (the HMI), verify before treating this as a defect.",
-    "family-gap": "A field is declared for every channel in a family (boilers 1–4, pumps 1–3) and used by all of them but exactly one, where it is never written. The usual cause: the block was copied from a neighbouring channel and left unfinished. The compiler stays silent — the variable exists and the type is right, nobody just writes to it. On site this shows up as “boiler 4 never reports alarms” while the other three work, and it never reproduces on the bench. The rule relies on declarations: if the field is not declared for that channel, it is different hardware rather than a gap, and nothing is reported.",
-    "param-channel-mismatch": "In a function block call the parameter name refers to one channel while the value comes from another: `bPump2_Fault := gvl.alarm_nasos_CO1`. The rule fires only when channel numbering is proven within the same call — consistent pairs exist for at least two channels. The consequence is quiet and dangerous: a faulty pump is treated as healthy and picked for duty, the interlock never fires, and the log looks perfectly normal.",
-    "index-mismatch": "Across a group of similar lines the relation between index positions holds nearly everywhere but is broken in one line: eleven lines write to their own channel, the twelfth writes to someone else's. That is what a copied neighbouring branch with partial renumbering looks like. The rule does not compare whole lines: numbers from different dimensions (boiler number and alarm block number) coincide routinely, and that case is accounted for. This is a heuristic — before changing anything, check whether the line is a deliberate exception.",
-    "self-enable": "A start command is derived from a function block output that is computed from its own input within the same scan, while that input is fed with the equipment's own feedback: pump rotation, valve position, “unit running”. The result is a deadlock — the equipment is stopped, so there is no permission, so there is no command, so it stays stopped. The loop never starts, and on a bench with the drive spun by hand everything looks fine. The phrase “within the same scan” is what matters: an output that depends on the input through memory (a start counter, a timer, an edge trigger) is perfectly legitimate in the command chain, and the rule leaves it alone.",
-    "timer-reset-by-own-condition": "A timer counts on a variable that is cleared on every path further down the same branch. Scan N: the input is TRUE, counting starts, the variable is dropped. Scan N+1: the input is already FALSE, the timer is reset together with the accumulated time, and the condition that was waiting for the delay is open. The pause lasts one task cycle instead of the setpoint — on a live site that was 0.01 s against the 30 s configured. The code compiles, reads as correct, the setpoint is on the screen, the operator adjusts it, and it changes nothing. The rule looks at the branch tree, not at adjacent lines: a reset under a condition (`IF T.Q THEN V := FALSE`) is the normal one-shot pattern, the timer does complete its delay, and such code is left alone.",
+    "self-assignment": "A line like `x := x;` assigns a variable to itself and does nothing. Usually a typo on the right-hand side (another variable was meant) or a leftover from deleted logic.",
+    "empty-branch": "An IF/ELSIF/ELSE branch or a loop body is empty (`THEN END_IF`, `DO END_FOR`): the logic was either never written or cut out during an edit and the construct left behind.",
+    "unused-local": "A local variable is declared in VAR but never appears in the POU body or its actions or methods: a leftover from deleted logic, or a typo in the body (in which case a different variable is doing the work).",
+    "heating-ai-no-range-check": "A value coming from an analog input (or a raw register) is never compared against a range anywhere in the project. On a broken or shorted sensor the input returns an extreme value and it travels into the controller as valid data: a broken Pt1000 reads as 0 °C and the valve opens fully. Inputs are taken from the device tree (nothing assigns them in code; the runtime does). A check means either a range comparison anywhere in the project or a read of the module's own channel error code (`error_analog_code` and the like). The latter is in fact stronger: a broken or shorted sensor is caught by the hardware. If plausibility is handled in a way static analysis cannot see (the HMI), verify before treating this as a defect.",
+    "family-gap": "A field is declared for every channel in a family (boilers 1–4, pumps 1–3) and used by all of them but exactly one, where it is never written. The usual cause: the block was copied from a neighbouring channel and left unfinished. The compiler stays silent: the variable exists and the type is right, nobody just writes to it. On site this shows up as “boiler 4 never reports alarms” while the other three work, and it never reproduces on the bench. The rule relies on declarations: if the field is not declared for that channel, it is different hardware rather than a gap, and nothing is reported.",
+    "param-channel-mismatch": "In a function block call the parameter name refers to one channel while the value comes from another: `bPump2_Fault := gvl.alarm_nasos_CO1`. The rule fires only when channel numbering is proven within the same call, that is, consistent pairs exist for at least two channels. The consequence is quiet and dangerous: a faulty pump is treated as healthy and picked for duty, the interlock never fires, and the log looks perfectly normal.",
+    "index-mismatch": "Across a group of similar lines the relation between index positions holds nearly everywhere but is broken in one line: eleven lines write to their own channel, the twelfth writes to someone else's. That is what a copied neighbouring branch with partial renumbering looks like. The rule does not compare whole lines: numbers from different dimensions (boiler number and alarm block number) coincide routinely, and that case is accounted for. This is a heuristic, so before changing anything check whether the line is a deliberate exception.",
+    "self-enable": "A start command is derived from a function block output that is computed from its own input within the same scan, while that input is fed with the equipment's own feedback: pump rotation, valve position, “unit running”. The result is a deadlock: the equipment is stopped, so there is no permission, so there is no command, so it stays stopped. The loop never starts, and on a bench with the drive spun by hand everything looks fine. The phrase “within the same scan” is what matters: an output that depends on the input through memory (a start counter, a timer, an edge trigger) is perfectly legitimate in the command chain, and the rule leaves it alone.",
+    "timer-reset-by-own-condition": "A timer counts on a variable that is cleared on every path further down the same branch. Scan N: the input is TRUE, counting starts, the variable is dropped. Scan N+1: the input is already FALSE, the timer is reset together with the accumulated time, and the condition that was waiting for the delay is open. The pause lasts one task cycle instead of the setpoint. On a live site that was 0.01 s against the 30 s configured. The code compiles, reads as correct, the setpoint is on the screen, the operator adjusts it, and it changes nothing. The rule looks at the branch tree, not at adjacent lines: a reset under a condition (`IF T.Q THEN V := FALSE`) is the normal one-shot pattern, the timer does complete its delay, and such code is left alone.",
     "timer-rearmed-by-own-branch": "The mirror case of the previous rule, and worse in its consequences. An off-delay (TOF) counts while its input stays FALSE: drop the command, the delay runs, the output goes off after the setpoint. If the input is re-armed to TRUE on every path further down the same branch, the count restarts every scan, the output never goes off, and the equipment never stops: the pump keeps coasting, the purge never ends, the fan stays on. An on-delay defect takes the delay away; this one takes the shutdown away. The rule tells the types apart: for TON the defect is clearing the input, for TOF re-arming it, and TP and BLINK are left alone entirely, because there the input acts as an edge and has nothing to do with the delay.",
-    "timer-off-delay-in-own-branch": "An off-delay counts while its input is DOWN: drop the command, the delay runs, the output goes off after the setpoint. If the timer is only called inside a branch whose condition requires that same input, then at the moment the command is dropped the branch does not execute, there is no call, and the accumulated time stays at zero. The delay never ends and the equipment never stops. For an on-delay the same code is correct — it is meant to count while the condition holds — so the rule looks only at TOF and TONOF. Found by enumerating combinations and confirmed with a scan emulator: the accumulated time stayed at zero under every input behaviour tried.",
-    "fb-call-overwritten": "A stateful FB instance — a timer or an edge detector — holds a single state. Two calls in a row within the same branch with different inputs mean only the last one reaches the timer: the first call cannot affect anything, although it looks live in the code. Calls in MUTUALLY EXCLUSIVE branches are a legitimate pattern — start the timer in one branch, reset it via `IN := FALSE` in the other. That pattern occurs seven times in our corpus and the rule leaves it alone; it only fires when both calls sit on the same path and run in the same scan.",
-    "edge-lost-in-own-branch": "An edge input — on R_TRIG, F_TRIG and on the counting input of CTU/CTUD — is compared with what the FB saw at its previous call. If it is only called inside a branch whose condition requires that same input, it never witnesses the input going down: at that moment the branch does not execute. Its internal memory stays latched, and every later rise no longer counts as an edge. Measured on a scan emulator: a detector produced one pulse out of ten transitions, and a CTU counted 1 against a preset of 5. The trap is that the FIRST edge works normally, so a quick check on site — press it, it fires — shows nothing; the defect appears from the second time on.",
-    "fb-preset-missing": "A preset — PT on a timer, PV on a counter — can be set in three ways: as a call argument, by assigning the field `t.PT := …`, or as an initial value in the declaration. If it is set nowhere, PT stays at zero and the output appears in the same scan in which the input went up. The code looks right: the call is there, the output is read, the delay is not. It differs from `timer-zero-pt` in that there the zero is written explicitly, while here the preset is simply missing — which is harder to spot by eye.",
-    "always-false-condition": "A condition that becomes identically false (or identically true) once same-scan assignments are substituted. The classic shape: one program derives a command from a sensor, another checks the alarm “command present but sensor absent” — substitution turns it into `NOT X AND X`, i.e. FALSE for any X. The alarm physically cannot fire: it is listed in the log, but there is no protection. The eye does not catch it because the assignment and the check live in different POUs, with the PLC_PRG call order between them. The rule substitutes only what is known for certain within the scan: the assignment must cover every execution path, and the source program must be called earlier. If a variable is assigned in several branches, every value is substituted and the rule fires only when the result is constant for all of them.",
-    "signal-without-source": "A boolean state signal (alarm, error, fault) is read in the program's conditions, but no line of code and no module channel ever writes it. It therefore stays at zero forever: the alarm interlock never trips, the lamp on the screen never lights, the log keeps a dead entry. On site this looks like a healthy protection precisely because it never fires. The usual cause: the signal was expected from outside — the wiring was to be delivered by someone else, or the fieldbus polling was never finished — while the condition is already in the code. The rule deliberately looks only at alarm-style names and only at booleans: commands and setpoints are legitimately written from the visualisation, and sensor values come straight from a channel, and a PLCopenXML export shows neither. Anything bound to a channel in the device tree or mentioned in a graphical body is left alone.",
-    "unsigned-vs-zero": "An unsigned variable (UINT, UDINT, WORD, BYTE and the like) is compared against zero in a way whose answer is known in advance: `x < 0` is never true, `x >= 0` is never false. The compiler does not complain, the branch compiles and never runs. Usually this is not a style issue but the trace of a wrongly chosen type: the guard against a negative value was written deliberately and the type silently cancelled it — and where a clamp to zero was expected, the value wraps around instead (0 − 1 on a UINT gives 65535). The `x >= 0` form is particularly nasty inside an alarm condition: it always holds, so the alarm either stays on permanently or masks the real one.",
-    "channel-sensor-off": "A module channel is wired to an IEC variable, but no sensor type is selected on it. The channel is not digitised: the variable stays at zero whatever the input. The trouble is that zero is plausible — for an outdoor sensor it reads as \"0 °C outside\", the weather-compensated curve immediately computes the wrong setpoint, and the commissioning engineer goes looking for the bug in the code. None of this is visible in ST, where the variable is declared and read as usual; the setting lives in the device parameters. A module usually has more free inputs than wired ones, and for those \"off\" is the correct setting, so the rule only looks at channels whose VALUE is bound to a variable (a status code is bound on free inputs too, and by that measure every input would look wired).",
-    "channel-output-off": "A module output is bound to a variable, but no output signal type is selected. The program writes to the variable, the value reaches the channel and stops there: the DAC produces neither 4…20 mA nor 0…10 V. From the outside it looks like a faulty actuator — the valve does not move, the drive does not respond — while the program is correct.",
-    "module-disabled": "The module carries the \"exclude from polling\" flag. The controller does not poll it at all: inputs are not refreshed, outputs are not driven, and every linked variable keeps the value it had when polling stopped. The flag is usually set during commissioning to silence a missing-module error and then never cleared — a whole cabinet of signals is quietly dead while the program works with stale values and never complains.",
+    "timer-off-delay-in-own-branch": "An off-delay counts while its input is DOWN: drop the command, the delay runs, the output goes off after the setpoint. If the timer is only called inside a branch whose condition requires that same input, then at the moment the command is dropped the branch does not execute, there is no call, and the accumulated time stays at zero. The delay never ends and the equipment never stops. For an on-delay the same code is correct, since it is meant to count while the condition holds, so the rule looks only at TOF and TONOF. Found by enumerating combinations and confirmed with a scan emulator: the accumulated time stayed at zero under every input behaviour tried.",
+    "fb-call-overwritten": "A stateful FB instance, a timer or an edge detector, holds a single state. Two calls in a row within the same branch with different inputs mean that within one scan the timer sees an input change that never happened in the process: the second call immediately overwrites the state left by the first, while the code looks like two live calls. Two legitimate patterns are left alone. Calls in MUTUALLY EXCLUSIVE branches: start the timer in one branch, reset it via `IN := FALSE` in the other (seven times in our corpus). And a restart within one scan: `t(IN := FALSE); t(IN := TRUE, PT := …);`, where the first call clears ET and Q and the second starts counting afresh. The rule only fires when both calls sit on the same path, run in the same scan, and the first one is not a reset.",
+    "edge-lost-in-own-branch": "An edge input, on R_TRIG, F_TRIG and on the counting input of CTU/CTUD, is compared with what the FB saw at its previous call. If it is only called inside a branch whose condition requires that same input, it never witnesses the input going down: at that moment the branch does not execute. Its internal memory stays latched, and every later rise no longer counts as an edge. Measured on a scan emulator: a detector produced one pulse out of ten transitions, and a CTU counted 1 against a preset of 5. The trap is that the FIRST edge works normally, so a quick check on site (press it, it fires) shows nothing; the defect appears from the second time on.",
+    "fb-preset-missing": "A preset, PT on a timer and PV on a counter, can be set in three ways: as a call argument, by assigning the field `t.PT := …`, or as an initial value in the declaration. If it is set nowhere, PT stays at zero and the output appears in the same scan in which the input went up. The code looks right: the call is there, the output is read, the delay is not. It differs from `timer-zero-pt` in that there the zero is written explicitly, while here the preset is simply missing, which is harder to spot by eye.",
+    "always-false-condition": "A condition that becomes identically false (or identically true) once same-scan assignments are substituted. The classic shape: one program derives a command from a sensor, another checks the alarm “command present but sensor absent”, and substitution turns it into `NOT X AND X`, i.e. FALSE for any X. The alarm physically cannot fire: it is listed in the log, but there is no protection. The eye does not catch it because the assignment and the check live in different POUs, with the PLC_PRG call order between them. The rule substitutes only what is known for certain within the scan: the assignment must cover every execution path, and the source program must be called earlier. If a variable is assigned in several branches, every value is substituted and the rule fires only when the result is constant for all of them.",
+    "signal-without-source": "A boolean state signal (alarm, error, fault) is read in the program's conditions, but no line of code and no module channel ever writes it. It therefore stays at zero forever: the alarm interlock never trips, the lamp on the screen never lights, the log keeps a dead entry. On site this looks like a healthy protection precisely because it never fires. The usual cause: the signal was expected from outside: the wiring was to be delivered by someone else, or the fieldbus polling was never finished, while the condition is already in the code. The rule deliberately looks only at alarm-style names and only at booleans: commands and setpoints are legitimately written from the visualisation, and sensor values come straight from a channel, and a PLCopenXML export shows neither. Anything bound to a channel in the device tree or mentioned in a graphical body is left alone.",
+    "unsigned-vs-zero": "An unsigned variable (UINT, UDINT, WORD, BYTE and the like) is compared against zero in a way whose answer is known in advance: `x < 0` is never true, `x >= 0` is never false. The compiler does not complain, the branch compiles and never runs. Usually this is not a style issue but the trace of a wrongly chosen type: the guard against a negative value was written deliberately and the type silently cancelled it, and where a clamp to zero was expected, the value wraps around instead (0 − 1 on a UINT gives 65535). The `x >= 0` form is particularly nasty inside an alarm condition: it always holds, so the alarm either stays on permanently or masks the real one.",
+    "write-series-outlier": "A block of uniform writes into an exchange buffer (`Real2word(x, ADR(wData[93]))`, `wData[95] := …`) is usually typed by copying the neighbouring block. The rule looks for writes of the same shape that go into a DIFFERENT buffer, with their indices sitting exactly in a hole of the main buffer's numbering: the main buffer's indices stop just before them and resume just after. That is the trace of lines copied without renaming the buffer. The damage is twofold: those cells of the main buffer are never filled (the receiver sees zeros), and in the other buffer the writes overwrite values that someone else puts there. Neither the compiler nor bounds checking complains: both arrays are declared and the indices are legal.",
+    "array-write-overlap": "A shared exchange array (HMI registers, Modbus, SCADA) is filled by several POUs, each with its own part. The rule collects the cells every POU writes by literal index and looks for overlaps between different POUs. The width of pointer writes is taken into account: if a function receives `ADR(A[k])` in series with a step of 2, it writes two words and `A[k+1]` is taken too. Direct writes `A[k] :=` from two POUs are not a finding on their own (that is often deliberate: initialisation versus operation, different modes), so a pointer write must be part of the overlap. The consequence: whichever runs later in the scan wins, the other POU's value never reaches the receiver, and the screen shows garbage instead of outputs or run times.",
+    "param-family-outlier": "A call to a unit's control block normally receives that unit's settings as one family: `Cfg.rValvePeriod`, `Cfg.rValveMinMove`, `Cfg.rValveMaxMove`. The rule looks for a call where one argument comes from a neighbouring family (`Cfg.rBurnerFullMove`) even though the value of the call's own family with the same tail exists in the project (`Cfg.rValveFullMove`). That is the trace of copying from a neighbouring unit. It is dangerous because commissioning does not reveal it: by default both settings are often equal and everything works. The defect shows only when one of them is changed, and from then on the position model, delay or protection of this unit runs on someone else's setting. Channel numbers are not compared here: a mixed-up number is what param-channel-mismatch catches.",
+    "output-stuck-outside-modes": "Unit control is often written as a chain of modes: `IF sensor_ok AND AUTO THEN … ELSIF MANUAL THEN … END_IF`. A discrete output (open/close, start) is switched on and off inside every branch. If there is no fallback branch and nothing outside the chain touches the output, then in any state not covered by a branch (sensor fault, selector at OFF, lost link) the output keeps last scan's value. If an open command was active at that moment, the relay stays energised until the limit switch, and the software position estimate stops updating. The rule leaves set/reset latches alone (a branch that only sets or only clears the output is meant to hold state) as well as chains whose conditions cover every combination.",
+    "for-unsigned-minus-one": "The upper bound `X - 1` with an unsigned X (UINT, WORD, UDINT, DWORD and the like) is never negative: with X = 0 the subtraction wraps around and yields the type's maximum, 65535 for a WORD. A loop that should not run at all runs tens of thousands of times per scan: the cycle time blows past the watchdog, and if the counter indexes an array, reads and writes go far beyond its bounds (without CheckBounds that corrupts neighbouring memory). The rule stays silent if X is a constant or the project somewhere checks `X > 0`, `X >= 1`, `X <> 0`, `X = 0` or clamps `X := MAX(…)`/`LIMIT(…)`. Most often X is a unit count entered on the HMI: during commissioning or after replacing the controller, zero is its most likely value.",
+    "buffer-window-overrun": "An exchange block (Modbus slave, serial port, file write) is given the start of a memory area and its size. If the start is shifted (`ADR(a) + 2` or `ADR(a[k])` with k above the lower bound) while the size stays the full `SIZEOF(a)`, the window runs past the end of the array by exactly the shift. Reading the last registers returns a neighbouring variable's contents, and a master write (Modbus functions 6/16) corrupts it; which variable depends on how the linker laid out memory. The compiler does not catch it, as both arguments are type-correct. The mistake usually appears when the first register is shifted to match the HMI map and the size is forgotten.",
+    "heating-dhw-fault-opens": "In the sensor-fault branch (or \"not AUTO\") the program should drive the actuator to a safe position, and which position is safe depends on the circuit. For space heating, fully open is usually right: the building does not freeze. For domestic hot water, an open heating-side valve means maximum heat into the exchanger with no control: overheated water at the tap and a scalding risk. The rule only looks at DHW circuits, and only by explicit markers: DHW/GVS in the POU or output name. In the branch that runs on a sensor fault (`IF NOT alarm … ELSE` or `IF alarm THEN`) it looks for an \"open\" output set to TRUE. Without explicit circuit markers it stays silent. Which position is safe is the process engineer's call: the finding is a question, not a verdict.",
+    "channel-sensor-off": "A module channel is wired to an IEC variable, but no sensor type is selected on it. The channel is not digitised: the variable stays at zero whatever the input. The trouble is that zero is plausible: for an outdoor sensor it reads as \"0 °C outside\", the weather-compensated curve immediately computes the wrong setpoint, and the commissioning engineer goes looking for the bug in the code. None of this is visible in ST, where the variable is declared and read as usual; the setting lives in the device parameters. A module usually has more free inputs than wired ones, and for those \"off\" is the correct setting, so the rule only looks at channels whose VALUE is bound to a variable (a status code is bound on free inputs too, and by that measure every input would look wired).",
+    "channel-output-off": "A module output is bound to a variable, but no output signal type is selected. The program writes to the variable, the value reaches the channel and stops there: the DAC produces neither 4…20 mA nor 0…10 V. From the outside it looks like a faulty actuator: the valve does not move, the drive does not respond, while the program is correct.",
+    "module-disabled": "The module carries the \"exclude from polling\" flag. The controller does not poll it at all: inputs are not refreshed, outputs are not driven, and every linked variable keeps the value it had when polling stopped. The flag is usually set during commissioning to silence a missing-module error and then never cleared, and a whole cabinet of signals is quietly dead while the program works with stale values and never complains.",
     "visu-two-labels": "The same variable is displayed on a screen next to different captions. This is almost always a copied element: \"Pump 1\" was drawn, duplicated next to it, the caption was fixed and the binding was not. The operator sees two instruments that in fact show one, and on site this surfaces exactly when a decision is made from the reading. Captions are compared by meaning: output formats (`%d`, `%.1f`) are stripped and extra whitespace is not treated as a difference.",
-    "visu-index-mismatch": "The number in an element's caption does not match the index in the bound variable: the caption says \"Boiler 3\" while the variable is `alarm_kotel[2]`. It is the same copy-paste trace, except here the error is visible right in the caption-to-binding pair. Format digits are stripped from the caption before comparing: on a live project `%2.0f Гц` next to `act_FH1` produced false positives — 2 and 0 are width and precision, not an equipment number.",
+    "visu-index-mismatch": "The number in an element's caption does not match the index in the bound variable: the caption says \"Boiler 3\" while the variable is `alarm_kotel[2]`. It is the same copy-paste trace, except here the error is visible right in the caption-to-binding pair. Format digits are stripped from the caption before comparing: on a live project `%2.0f Гц` next to `act_FH1` produced false positives: 2 and 0 are width and precision, not an equipment number.",
     "plcopen-naming": "PLCopen standard: a variable name starts with a type prefix (BOOL→x, INT→i, REAL→r, DINT→di, TIME→t, WORD→w …). An optional conformance check.",
     "naming": "Single-character names (other than counters i/j/k/n) are unreadable during maintenance. I/O tags and FB pins are left alone.",
-    "magic-number": "A large/fractional raw constant without a name — easy to miss when changing a setpoint and hard to understand. Move it to a VAR CONSTANT. Array indices, FOR bounds and small integers (<16) don't count; equal constants are grouped by value.",
-    "missing-comments": "A POU with substantial logic and not a single comment — a nightmare when troubleshooting six months later. At least a purpose header and notes on the non-obvious parts.",
-    "routine-size": "An overly long routine is hard to read and edit. Extract the repeated logic into a FUNCTION_BLOCK — shorter and reusable.",
+    "magic-number": "A large/fractional raw constant without a name is easy to miss when changing a setpoint and hard to understand. Move it to a VAR CONSTANT. Array indices, FOR bounds and small integers (<16) don't count; equal constants are grouped by value.",
+    "missing-comments": "A POU with substantial logic and not a single comment is a nightmare when troubleshooting six months later. At least a purpose header and notes on the non-obvious parts.",
+    "routine-size": "An overly long routine is hard to read and edit. Extract the repeated logic into a FUNCTION_BLOCK: shorter and reusable.",
     "copy-paste": "Structurally identical blocks (even with renamed tags) are a source of bugs: a fix in one place is forgotten in the others, and copy-pasting someone else's loop drags along its gating flags. A candidate for a shared parameterised FB.",
-    "cfc-div-zero": "In graphical code (CFC/FBD) the divisor of a DIV/MOD block is wired to a literal constant 0 — a runtime exception when the block executes. Checked against the connection graph.",
+    "cfc-div-zero": "In graphical code (CFC/FBD) the divisor of a DIV/MOD block is wired to a literal constant 0, which is a runtime exception when the block executes. Checked against the connection graph.",
 },
 }
 
@@ -1828,6 +2144,34 @@ RULE_FIX = {
         "Если отрицательного быть не может — уберите мёртвую ветвь: она создаёт ложное чувство защиты у того, кто будет читать код после вас.",
         "Проверьте арифметику выше по коду: у беззнакового `0 - 1` даёт максимум диапазона, и зажим в ноль как раз от этого и не спасает.",
     ],
+    "write-series-outlier": [
+        "Сверьте имя буфера с соседними строками серии: если это та же таблица обмена, замените буфер, и дыра в нумерации закроется.",
+        "Если запись в другой буфер задумана, вынесите её из серии в отдельный блок с комментарием: так её не примут за ошибку копирования и не «исправят» обратно.",
+    ],
+    "array-write-overlap": [
+        "Разведите адреса: у каждого значения в таблице обмена должна быть своя ячейка, а двухсловное значение занимает две.",
+        "Если ячейку действительно пишут два POU по очереди, оставьте одного писателя, а второму дайте флаг или отдельную переменную.",
+    ],
+    "param-family-outlier": [
+        "Передайте величину своего семейства (её имя есть в сообщении) и проверьте, что у неё правильное значение по умолчанию.",
+        "Если узлы действительно делят одну настройку, заведите для неё общее имя без привязки к узлу: тогда при следующем копировании никто не примет её за ошибку.",
+    ],
+    "output-stuck-outside-modes": [
+        "Добавьте ветвь ELSE, которая переводит выход в безопасное состояние (обычно оба реле сняты), или сбрасывайте выход перед цепочкой.",
+        "Решите с технологом, куда безопасно для этого узла: для одних «стоп», для других «открыть до конца» — но решение должно быть в коде, а не в прошлом скане.",
+    ],
+    "for-unsigned-minus-one": [
+        "Оберните цикл проверкой `IF X > 0 THEN … END_IF` или ограничьте значение при вводе: `X := LIMIT(1, X, N_MAX);`.",
+        "Если X индексирует массив, проверьте и верхний край: `X - 1` не должен выходить за объявленную границу массива.",
+    ],
+    "buffer-window-overrun": [
+        "Уменьшите размер на сдвиг: `BufSize := SIZEOF(a) - 2` (сдвиг в байтах) или объявите массив под нужное окно.",
+        "Проверьте карту регистров панели или мастера: последний регистр, к которому он обращается, должен лежать внутри массива.",
+    ],
+    "heating-dhw-fault-opens": [
+        "Согласуйте с технологом безопасное положение клапана ГВС при отказе датчика; обычно это «закрыть» или фиксированное положение, а не «открыть».",
+        "Если открытие оставлено осознанно (например, есть независимая защита от перегрева), напишите это комментарием в ветви отказа.",
+    ],
     "channel-sensor-off": [
         "Выберите тип датчика на канале в «Параметрах устройства» — тот, что физически подключён (ТСП100, ТСП1000, 4…20 мА).",
         "Если вход действительно не используется — снимите привязку переменной к каналу, тогда «Отключен» станет честной настройкой и правило замолчит.",
@@ -1895,7 +2239,7 @@ RULE_FIX = {
 "en": {
     "undeclared-global": [
         "Check the spelling against the GVL declaration (case, underscores, digits).",
-        "If the variable is really needed — add it to the GVL with a type and a comment.",
+        "If the variable is really needed, add it to the GVL with a type and a comment.",
     ],
     "unreachable-branch": [
         "Order the thresholds ascending with non-overlapping ranges: `IF x < T1 THEN … ELSIF x < T2 THEN … ELSE …`",
@@ -1913,16 +2257,16 @@ RULE_FIX = {
         "Or: `T := DINT_TO_TIME(REAL_TO_DINT(sec * 1000.0));`",
     ],
     "real-to-word-mul": [
-        "Check the range; if the product can exceed 65535 — use DWORD/UDINT.",
+        "Check the range; if the product can exceed 65535, use DWORD or UDINT.",
     ],
     "double-semicolon": ["Remove the extra `;`."],
     "dead-pou": [
-        "Not needed — delete the POU.",
-        "A forgotten version — check the call name against the spec, possibly a typo in the name.",
+        "If it is not needed, delete the POU.",
+        "A forgotten version: check the call name against the spec, possibly a typo in the name.",
     ],
     "div-by-zero": [
-        "Remove the division by 0 — probably a typo in the divisor.",
-        "If the divisor can be zero dynamically — guard it: `IF d <> 0 THEN r := x / d; END_IF`",
+        "Remove the division by 0; it is probably a typo in the divisor.",
+        "If the divisor can be zero dynamically, guard it: `IF d <> 0 THEN r := x / d; END_IF`",
     ],
     "broken-implicit-check": [
         "Restore the protective logic: `CheckDivReal` must test `IF divisor = 0 THEN … := 1;`",
@@ -1930,27 +2274,27 @@ RULE_FIX = {
     ],
     "modbus-address-duplicate": [
         "Assign each module a unique address (IP or Unit-ID) in the device configuration.",
-        "Cross-check the network address map — an address must be unique on one bus.",
+        "Cross-check the network address map: an address must be unique on one bus.",
     ],
     "watchdog-disabled": [
         "Enable the task watchdog: in the task configuration tick Watchdog and set the time (usually a multiple of the cycle, e.g. 100 ms for a 10 ms cycle).",
-        "At least for the main control task — visualization/cloud tasks can go without one.",
+        "At least for the main control task; visualization and cloud tasks can go without one.",
     ],
     "implicit-check-disabled": [
-        "Regenerate the POUs for Implicit Checks via the standard CODESYS dialog — that gives the check its `CheckFunction` registration so the runtime calls it.",
+        "Regenerate the POUs for Implicit Checks via the standard CODESYS dialog: that gives the check its `CheckFunction` registration so the runtime calls it.",
         "Add the missing category (bounds/division/range/pointer) via `Add Object → POUs for Implicit Checks`.",
     ],
     "missing-implicit-checks": [
         "Add the object: in CODESYS right-click Application → `Add Object → POUs for Implicit Checks`, tick the ones you need (Bounds, Division, Range, Pointer).",
-        "Make sure the implementation isn't empty — the default stubs protect, an empty body doesn't.",
+        "Make sure the implementation is not empty: the default stubs protect, an empty body does not.",
     ],
     "timer-zero-pt": [
         "Set a non-zero delay: `tmr(IN := cond, PT := T#5S);`",
-        "If no delay is needed — remove the timer and act on the condition directly.",
+        "If no delay is needed, remove the timer and act on the condition directly.",
     ],
     "case-without-else": [
         "Add an `ELSE` branch with default handling (signal/log/safe state).",
-        "If all selector values are truly covered — keep `ELSE` with an explanatory comment.",
+        "If all selector values are truly covered, keep `ELSE` with an explanatory comment.",
     ],
     "deep-nesting": [
         "Invert the conditions and use early exits (`RETURN`/`CONTINUE`) instead of nesting.",
@@ -1958,27 +2302,27 @@ RULE_FIX = {
     ],
     "heating-ai-no-range-check": [
         "Compare the value with the sensor's physical range right after scaling: `IF T_out < -50.0 OR T_out > 150.0 THEN bSensorFault := TRUE; END_IF`",
-        "While the reading is invalid, substitute a safe value (the last valid one, or a setpoint) instead of the raw one — a frozen plant usually starts with “0 °C outside”.",
-        "If plausibility is handled by a separate alarm FB or by the HMI, the rule cannot see it — disable it in /rules or mark it as noisy.",
+        "While the reading is invalid, substitute a safe value (the last valid one, or a setpoint) instead of the raw one. A frozen plant usually starts with “0 °C outside”.",
+        "If plausibility is handled by a separate alarm FB or by the HMI, the rule cannot see it; disable it in /rules or mark it as noisy.",
     ],
     "family-gap": [
-        "Check that channel's block: an assignment was most likely copied from the neighbour and kept its indexes — `gvl.kotel_3_alarms3 := ...` instead of `gvl.kotel_4_alarms3 := ...`.",
-        "If the field genuinely does not apply to that channel (no such hardware), drop its declaration — the rule goes quiet and the GVL loses a dead variable.",
+        "Check that channel's block: an assignment was most likely copied from the neighbour and kept its indexes: `gvl.kotel_3_alarms3 := ...` instead of `gvl.kotel_4_alarms3 := ...`.",
+        "If the field genuinely does not apply to that channel (no such hardware), drop its declaration. The rule goes quiet and the GVL loses a dead variable.",
     ],
     "param-channel-mismatch": [
         "Fix the index in the value: `bPump2_Fault := gvl.alarm_nasos_CO2`.",
-        "Repeated per-channel calls are better folded into a loop over an array (`FOR i := 1 TO 3 DO fb[i](...)`) — then there is nothing left to renumber.",
+        "Repeated per-channel calls are better folded into a loop over an array (`FOR i := 1 TO 3 DO fb[i](...)`), and then there is nothing left to renumber.",
     ],
     "index-mismatch": [
-        "Compare the line with its neighbours in the group: usually the destination was not renumbered — `w_cascadK4 := r_cascadK4` instead of `w_cascadK3 := r_cascadK4`.",
-        "If the line is a deliberate exception, put a comment next to it — that saves the next reader (and you in six months) an investigation.",
+        "Compare the line with its neighbours in the group: usually the destination was not renumbered: `w_cascadK4 := r_cascadK4` instead of `w_cascadK3 := r_cascadK4`.",
+        "If the line is a deliberate exception, put a comment next to it. That saves the next reader, and you in six months, an investigation.",
     ],
     "self-enable": [
-        "Feed the STATE output into the command instead of a permission output that contains the input itself: `NOT bProtBlocked1` rather than `bStartAllow`. The protection keeps working — the start-count lockout is unaffected.",
+        "Feed the STATE output into the command instead of a permission output that contains the input itself: `NOT bProtBlocked1` rather than `bStartAllow`. The protection keeps working, and the start-count lockout is unaffected.",
         "Check what is wired to the block input: the start command and the running feedback are different signals, and swapping one for the other only shows up on site.",
     ],
     "timer-reset-by-own-condition": [
-        "Take the timer input from OUTSIDE the branch the timer gates: `pause(IN := run_both, PT := …); run_2 := pause.Q;`. The branch then cannot clear the timer's own count even by accident — and usually the whole IF turns out to be unnecessary.",
+        "Take the timer input from OUTSIDE the branch the timer gates: `pause(IN := run_both, PT := …); run_2 := pause.Q;`. The branch then cannot clear the timer's own count even by accident, and usually the whole IF turns out to be unnecessary.",
         "If there is no external signal, separate “what we time” from “what we clear”: arm the timer from a dedicated hold flag (`switching`) that is set when the switchover starts and cleared on `T.Q`, and feed the run condition from that flag.",
         "Verify the delay on site by measurement, not by reading the code: a pause like this expires in one task cycle, and on the screen it looks like an instant switchover at any setpoint.",
     ],
@@ -2011,12 +2355,40 @@ RULE_FIX = {
         "If there will be no source, drop the condition together with the variable: a dead interlock is more dangerous than a missing one, because people rely on it.",
     ],
     "unsigned-vs-zero": [
-        "If a negative value is possible, switch the type to a signed one (INT/DINT/REAL) — the guard will then do what it was meant to do.",
+        "If a negative value is possible, switch the type to a signed one (INT, DINT or REAL). The guard will then do what it was meant to do.",
         "If a negative value is impossible, drop the dead branch: it gives a false sense of protection to whoever reads the code after you.",
         "Check the arithmetic above it: on an unsigned type `0 - 1` yields the top of the range, which is exactly what a clamp to zero fails to catch.",
     ],
+    "write-series-outlier": [
+        "Compare the buffer name with the neighbouring lines of the series: if it is the same exchange table, change the buffer and the hole in the numbering closes.",
+        "If writing to the other buffer is intended, move it out of the series into its own block with a comment, so nobody takes it for a copy error and \"fixes\" it back.",
+    ],
+    "array-write-overlap": [
+        "Separate the addresses: every value in the exchange table needs its own cell, and a two-word value takes two.",
+        "If two POUs really take turns writing the cell, keep a single writer and give the other one a flag or a separate variable.",
+    ],
+    "param-family-outlier": [
+        "Pass the value from the call's own family (its name is in the message) and check that its default is right.",
+        "If the units really share one setting, give it a common name not tied to either unit, so the next person copying the code does not take it for a mistake.",
+    ],
+    "output-stuck-outside-modes": [
+        "Add an ELSE branch that puts the output into a safe state (usually both relays off), or reset the output before the chain.",
+        "Agree with the process engineer what is safe for this unit: for some it is stop, for others fully open; either way the decision belongs in the code, not in the previous scan.",
+    ],
+    "for-unsigned-minus-one": [
+        "Wrap the loop in `IF X > 0 THEN … END_IF` or clamp the value where it is entered: `X := LIMIT(1, X, N_MAX);`.",
+        "If X indexes an array, check the upper end too: `X - 1` must not exceed the array's declared bound.",
+    ],
+    "buffer-window-overrun": [
+        "Reduce the size by the shift: `BufSize := SIZEOF(a) - 2` (shift in bytes), or declare the array to match the window.",
+        "Check the HMI or master register map: the last register it accesses must lie inside the array.",
+    ],
+    "heating-dhw-fault-opens": [
+        "Agree the safe position of the DHW valve on a sensor fault with the process engineer; it is usually closed or a fixed position, not open.",
+        "If opening is deliberate (for instance, there is independent overheat protection), say so in a comment inside the fault branch.",
+    ],
     "channel-sensor-off": [
-        "Select the sensor type for the channel in the device parameters — the one physically connected (Pt100, Pt1000, 4…20 mA).",
+        "Select the sensor type for the channel in the device parameters: the one physically connected (Pt100, Pt1000, 4…20 mA).",
         "If the input really is unused, remove the variable binding from the channel: \"off\" then becomes an honest setting and the rule goes quiet.",
     ],
     "channel-output-off": [
@@ -2032,16 +2404,16 @@ RULE_FIX = {
         "For identical instruments a single visualisation template with a variable parameter is easier: there is nothing to copy and no binding to drift.",
     ],
     "visu-index-mismatch": [
-        "Fix whichever is wrong — the index in the binding or the number in the caption. On site the operator trusts the caption.",
+        "Fix whichever is wrong: the index in the binding, or the number in the caption. On site the operator trusts the caption.",
         "If the caption number refers to something other than the array index (a position on the diagram, say), spell that out in the caption so the mismatch does not read as an error.",
     ],
     "plcopen-naming": [
         "Rename by the prefix table: `value : REAL` → `rValue`, `cnt : INT` → `iCnt`.",
-        "If you don't need PLCopen naming — just don't enable this profile.",
+        "If you do not need PLCopen naming, simply leave this profile off.",
     ],
     "cfc-div-zero": [
-        "Wire a variable/setpoint into the divisor input instead of the literal 0 — usually a debug stub left behind.",
-        "If the divisor can go to zero at runtime — pick a safe value before DIV/MOD (a SEL on a compare-with-0).",
+        "Wire a variable/setpoint into the divisor input instead of the literal 0; it is usually a debug stub left behind.",
+        "If the divisor can go to zero at runtime, pick a safe value before DIV/MOD (a SEL on a compare-with-0).",
     ],
     "naming": ["Give it a meaningful name by purpose (e.g. `iRetryCount` instead of `n`)."],
     "magic-number": [
@@ -2056,7 +2428,7 @@ RULE_FIX = {
     ],
     "copy-paste": [
         "Create one FUNCTION_BLOCK with input parameters (setpoints, loop tags) and instantiate it per loop.",
-        "For per-channel repeats — a FOR loop over an array of structures.",
+        "For per-channel repeats, use a FOR loop over an array of structures.",
     ],
     "array-bounds": [
         "Bring the index into the declared range or widen the array bounds.",
@@ -2064,15 +2436,15 @@ RULE_FIX = {
     ],
     "infinite-loop": [
         "Add an exit condition and `EXIT`, or bound it with an iteration counter.",
-        "Split heavy processing across scans — an infinite loop trips the task watchdog.",
+        "Split heavy processing across scans: an infinite loop trips the task watchdog.",
     ],
     "self-assignment": [
-        "The right-hand side probably should be another variable (typo) — check the intent.",
-        "If the line is redundant — remove it.",
+        "The right-hand side probably should be another variable (a typo); check the intent.",
+        "If the line is redundant, remove it.",
     ],
     "empty-branch": [
         "Fill the branch with logic or remove the empty IF/loop.",
-        "If empty on purpose — leave an explanatory comment.",
+        "If it is empty on purpose, leave an explanatory comment.",
     ],
     "unused-local": [
         "Remove the unused declaration.",
@@ -2203,6 +2575,13 @@ RULE_TITLE = {
     "always-false-condition": "Условие не выполнится ни при каких значениях",
     "signal-without-source": "Аварию никто не формирует",
     "unsigned-vs-zero": "Беззнаковое сравнивается с нулём",
+    "write-series-outlier": "Запись из серии ушла в чужой буфер",
+    "array-write-overlap": "Два POU пишут одни ячейки массива",
+    "param-family-outlier": "Параметр получает величину чужого узла",
+    "output-stuck-outside-modes": "Выход замирает, когда не выполнен ни один режим",
+    "for-unsigned-minus-one": "Цикл до X - 1 при беззнаковом X",
+    "buffer-window-overrun": "Окно буфера сдвинуто, а размер прежний",
+    "heating-dhw-fault-opens": "ГВС: при отказе датчика клапан открывается",
     "channel-sensor-off": "У занятого канала снят тип датчика",
     "channel-output-off": "Выход модуля не настроен",
     "module-disabled": "Модуль исключён из опроса",
@@ -2216,12 +2595,12 @@ RULE_TITLE = {
     "unreachable-branch": "Unreachable IF/ELSIF branch",
     "uncalled-timer": "Uncalled timer/trigger",
     "int-division": "Integer division (lost fraction?)",
-    "real-to-time-mul": "REAL_TO_TIME(...)*N — setpoint truncation",
-    "real-to-word-mul": "REAL_TO_WORD(...)*N — WORD overflow?",
+    "real-to-time-mul": "REAL_TO_TIME(...)*N truncates the setpoint",
+    "real-to-word-mul": "REAL_TO_WORD(...)*N may overflow WORD",
     "double-semicolon": "Double `;;` (empty statement)",
-    "dead-pou": "Dead code — POU is never called",
+    "dead-pou": "Dead code: a POU nobody calls",
     "naming": "Cryptic variable name",
-    "magic-number": "Magic number — raw constant in code",
+    "magic-number": "Magic number: a raw constant in code",
     "missing-comments": "POU without a single comment",
     "routine-size": "Bloated routine (decomposition candidate)",
     "copy-paste": "Duplicated logic block (copy-paste)",
@@ -2240,7 +2619,7 @@ RULE_TITLE = {
     "empty-branch": "Empty IF/loop branch",
     "unused-local": "Unused local variable",
     "heating-ai-no-range-check": "Analog input without a plausibility check",
-    "family-gap": "Channel never written — gap in a channel family",
+    "family-gap": "Channel never written: a gap in the family",
     "param-channel-mismatch": "Channel parameter fed from another channel",
     "index-mismatch": "Line indexes differently from its group",
     "self-enable": "Command depends on its own feedback",
@@ -2248,11 +2627,18 @@ RULE_TITLE = {
     "timer-rearmed-by-own-branch": "Off-delay never expires",
     "timer-off-delay-in-own-branch": "Off-delay is not called when it should be counting",
     "fb-call-overwritten": "A second call to the instance overwrites the first",
-    "edge-lost-in-own-branch": "An edge-sensitive input never sees the drop — only the first event counts",
+    "edge-lost-in-own-branch": "An edge input never sees the drop, so only the first event counts",
     "fb-preset-missing": "The instance has no preset anywhere",
     "always-false-condition": "Condition can never be true",
     "signal-without-source": "Nothing ever raises this alarm",
     "unsigned-vs-zero": "Unsigned compared against zero",
+    "write-series-outlier": "One write in a series goes to another buffer",
+    "array-write-overlap": "Two POUs write the same array cells",
+    "param-family-outlier": "Parameter fed from another unit's settings",
+    "output-stuck-outside-modes": "Output freezes when no mode branch applies",
+    "for-unsigned-minus-one": "Loop up to X - 1 with an unsigned X",
+    "buffer-window-overrun": "Buffer window shifted but size unchanged",
+    "heating-dhw-fault-opens": "DHW: valve opens on a sensor fault",
     "channel-sensor-off": "Sensor type cleared on a wired channel",
     "channel-output-off": "Module output left unconfigured",
     "module-disabled": "Module excluded from polling",
@@ -2302,13 +2688,21 @@ DETAIL = {
     "timer-reset.reduced": ". При положительной уставке выход `{timer}.Q` тождественно ложен, поэтому условие `{cond}` равносильно `{to}` — таймер в этом коде ни на что не влияет",
     "timer-rearmed-by-own-branch": "таймер `{timer}` отсчитывает задержку выключения по `{var}`, а `{var}` снова взводится в строке {rl} на всех путях этой же ветви — отсчёт начинается заново на каждом скане, выдержка не истекает никогда, и команда с выхода не снимается",
     "timer-off-delay-in-own-branch": "таймер `{timer}` — задержка выключения, но все его вызовы лежат внутри ветви, требующей `{var}`: когда `{var}` снимут, вызова не будет, и выдержка не начнёт отсчитываться",
-    "fb-call-overwritten": "экземпляр `{timer}` вызван дважды подряд: в строке {fl} со входом `{first}`, затем со входом `{second}` — до таймера дойдёт только второй, первый вызов не делает ничего",
+    "fb-call-overwritten": "экземпляр `{timer}` вызван дважды подряд: в строке {fl} со входом `{first}`, затем со входом `{second}`. Оба вызова исполняются в одном скане, и состояние, оставленное первым, тут же перезаписывает второй; если задуман перезапуск, первым вызовом передают `IN := FALSE` — такую запись правило не трогает",
     "edge-lost-in-own-branch": "экземпляр `{edge}` ({type}) со входом по фронту вызывается только внутри ветви, требующей `{var}`: снятия входа он не видит, память остаётся взведённой, и все фронты после первого теряются",
     "fb-preset-missing": "у экземпляра `{timer}` типа {type} уставка не задана ни в вызове, ни присваиванием в поле, ни в объявлении — PT остаётся нулевым, и выход появится в том же скане, что и вход",
     "always-false-condition": "{what} всегда {val}, если подставить значения этого же скана: {steps}",
     "signal-without-source": "`{var}` читается в условиях ({readers}), но ни одна строка кода и ни один канал модуля его не записывают — сигнал навсегда остаётся в нуле, и защита по нему не срабатывает ни разу",
     "unsigned-vs-zero": "`{var} : {type}` — тип беззнаковый, поэтому сравнение с нулём всегда {val}, и ветвь не исполняется ни при каких значениях",
     "signal-without-source.confirmed": "`{var}` читается ({readers}), но его не записывает ни одна строка кода, ни один канал модуля и ни один элемент экрана — источника нет вообще, сигнал навсегда остаётся в нуле, и защита по нему не срабатывает ни разу",
+    "write-series-outlier": "записи той же формы ({n}) идут в `{buf}[{rng}]`, а вся серия вокруг пишет в `{main}`: у `{main}` номера обрываются на {below} и продолжаются с {above}, дыра ровно здесь. Похоже на строки, скопированные из соседнего блока без замены буфера: в `{main}` эти ячейки не заполняются никогда, а в `{buf}` затираются чужие значения",
+    "array-write-overlap": "`{fn}` пишет по `ADR({buf}[…])` по {w} слова за вызов, и ячейки {cells} того же массива пишет также `{other}` (строка {l2}). Кто выполнится позже в скане, того значение и уйдёт получателю, второе теряется",
+    "param-family-outlier": "в вызове `{fb}` параметр `{formal}` получает `{val}`, а остальные аргументы этого вызова берутся из семейства `{fam}` ({n} шт.). Своя величина с тем же хвостом в проекте есть: `{cand}`. Пока обе уставки равны, разницы не видно; после настройки одной из них этот узел начнёт работать по чужой",
+    "output-stuck-outside-modes": "цепочка `IF … ELSIF …` из {k} ветвей без ELSE: {outs} включают и выключают в каждой ветви, а вне цепочки не трогают. Когда ни одно условие не выполнено (отказ датчика, третье положение переключателя), выход остаётся в последнем состоянии: шла команда «открыть» — реле так и останется под током",
+    "for-unsigned-minus-one": "`{x}` объявлен как {type}: при {x} = 0 граница `{x} - 1` переворачивается в максимум типа, и цикл по `{i}` проходит десятки тысяч раз за скан; проверки `{x} > 0` в проекте нет",
+    "for-unsigned-minus-one.arr": ". Счётчик индексирует `{arr}[{i}]`, поэтому чтение и запись уйдут за границы массива",
+    "buffer-window-overrun": "`{fb}` получает начало `{buf}` со сдвигом `{off}`, а размер — `SIZEOF({buf})` целиком: окно выходит за конец массива на величину сдвига. Последние регистры читают соседнюю переменную, а запись мастером её испортит",
+    "heating-dhw-fault-opens": "в ветви, которая выполняется при отказе датчика (условие цепочки, строка {l0}: `{cond}`), выход `{out}` ставится в TRUE: клапан ГВС ведут на открытие. Для отопления это безопасно, для ГВС это полный нагрев без регулирования, перегрев воды у потребителя и риск ожога. Подтвердите у технолога, куда безопасно для этого клапана",
     "channel-sensor-off": "у модуля `{dev}` канал заведён на переменную, но тип датчика не выбран («Отключен»): `{par}` — канал не оцифровывается, переменная остаётся нулём, а для наружной температуры ноль выглядит правдоподобно",
     "channel-output-off": "у модуля `{dev}` выход привязан к переменной, но тип выходного сигнала не выбран: `{par}` — команда уходит в никуда, исполнительный механизм не двигается",
     "module-disabled": "модуль `{dev}` исключён из опроса (`{par}` = TRUE) — все его входы и выходы мертвы, программа работает со старыми значениями",
@@ -2320,52 +2714,60 @@ DETAIL = {
 "en": {
     "array-bounds": "{var}[{idx}] out of bounds [{lo}..{hi}]",
     "div-by-zero": "division/MOD by a literal zero",
-    "div-by-zero.zerovar": "division by `{var}` — the variable is 0 (init 0/empty) and never assigned → a guaranteed division by zero",
-    "div-by-zero.maybezero": "division by `{var}` — the variable is assigned 0 on some branch and there's no `{var} <> 0` guard → a possible division by zero",
-    "timer-zero-pt": "PT := T#0 — the timer fires instantly (no delay)",
-    "undeclared-global": "gvl.{base} — not in the GVL (likely a typo)",
-    "unreachable-branch": "lines {l1}/{l2}: {v1}<{t1} and {v1}>={t2} — complementary condition, the following ELSIF are dead",
-    "uncalled-timer": "`{inst}` ({typ}) — .Q/.IN read, but the FB is never called → never runs",
-    "dead-pou": "{nm} — never called and not used as a type",
-    "naming": "`{vn}` — single-character name, give it a meaningful one",
-    "magic-number.multi": "constant {val} — in {n} POUs ({shown}); extract into a shared VAR CONSTANT",
-    "magic-number.single": "constant {val} — extract into a named VAR CONSTANT",
+    "div-by-zero.zerovar": "division by `{var}`: the variable is 0 (init 0/empty) and never assigned → a guaranteed division by zero",
+    "div-by-zero.maybezero": "division by `{var}`: the variable is assigned 0 on some branch and there is no `{var} <> 0` guard → a possible division by zero",
+    "timer-zero-pt": "PT := T#0, so the timer fires instantly with no delay",
+    "undeclared-global": "gvl.{base} is not in the GVL (likely a typo)",
+    "unreachable-branch": "lines {l1}/{l2}: {v1}<{t1} and {v1}>={t2}: complementary conditions, so the following ELSIF are dead",
+    "uncalled-timer": "`{inst}` ({typ}): .Q/.IN read, but the FB is never called → never runs",
+    "dead-pou": "{nm} is never called and not used as a type",
+    "naming": "`{vn}` is a single-character name; give it a meaningful one",
+    "magic-number.multi": "constant {val} appears in {n} POUs ({shown}); extract it into a shared VAR CONSTANT",
+    "magic-number.single": "constant {val}: extract it into a named VAR CONSTANT",
     "missing-comments": "{n} lines of logic, not a single comment",
-    "routine-size": "{n} lines of logic (> {max}) — split into a FUNCTION_BLOCK",
-    "copy-paste.intra": "inside {pou}: {blocks} duplicated block(s), repeated up to {repeats}× (~{lines} lines) — extract into a loop/FB",
-    "copy-paste.inter": "{pous}: structurally near-identical — {blocks} shared block(s) (~{lines} lines) → a shared parameterised FUNCTION_BLOCK",
-    "self-assignment": "assignment to itself — no effect",
-    "case-without-else": "CASE without ELSE — unhandled selector values are silently ignored",
-    "deep-nesting": "IF nesting = {depth} (> {max}) — simplify/extract into an FB",
+    "routine-size": "{n} lines of logic (> {max}); split it into a FUNCTION_BLOCK",
+    "copy-paste.intra": "inside {pou}: {blocks} duplicated block(s), repeated up to {repeats}× (~{lines} lines); extract into a loop or an FB",
+    "copy-paste.inter": "{pous}: structurally near-identical, with {blocks} shared block(s) (~{lines} lines) → a shared parameterised FUNCTION_BLOCK",
+    "self-assignment": "assignment to itself, which has no effect",
+    "case-without-else": "CASE without ELSE: unhandled selector values are silently ignored",
+    "deep-nesting": "IF nesting = {depth} (> {max}); simplify it or extract an FB",
     "unused-local.multi": "{n} unused locals: {shown}",
-    "unused-local.single": "{shown} — declared but never used",
-    "implicit-check-disabled.dormant": "the POU looks like a check function but isn't registered (no CheckFunction) — present, but the runtime never calls it",
-    "missing-implicit-checks": "the project has no POUs for implicit checks — the runtime is unprotected against array-bounds overrun, division by zero, range overflow and an invalid pointer",
-    "implicit-check-disabled.category": "the runtime doesn't check '{cat}' — no active check function for this category",
-    "broken-implicit-check": "{why} — the check exists but doesn't work (a false sense of safety)",
-    "watchdog-disabled": "the watchdog is disabled on {n} task(s): {names} — no automatic restart on a scan overrun/hang",
-    "modbus-address-duplicate": "the same Modbus address {addr} on several modules: {names} — a conflict on the bus",
-    "heating-ai-no-range-check": "module {pou}: {n} input(s) have no plausibility check — neither a range comparison nor a channel error code — {ex}{more}; on a broken sensor the value reaches the controller as valid data (please verify)",
-    "family-gap": "field `{field}` is declared but never written for channel {ch}, while channels {have} do write it — looks like the block was copied from a neighbouring channel and left unfinished",
+    "unused-local.single": "{shown} is declared but never used",
+    "implicit-check-disabled.dormant": "the POU looks like a check function but isn't registered (no CheckFunction), so the runtime never calls it",
+    "missing-implicit-checks": "the project has no POUs for implicit checks, so the runtime is unprotected against array-bounds overrun, division by zero, range overflow and an invalid pointer",
+    "implicit-check-disabled.category": "the runtime does not check '{cat}': there is no active check function for this category",
+    "broken-implicit-check": "{why}. The check exists but does not work, which is a false sense of safety",
+    "watchdog-disabled": "the watchdog is disabled on {n} task(s): {names}, so there is no automatic restart on a scan overrun or a hang",
+    "modbus-address-duplicate": "the same Modbus address {addr} on several modules: {names}, which is a conflict on the bus",
+    "heating-ai-no-range-check": "module {pou}: {n} input(s) have no plausibility check, neither a range comparison nor a channel error code ({ex}{more}); on a broken sensor the value reaches the controller as valid data (please verify)",
+    "family-gap": "field `{field}` is declared but never written for channel {ch}, while channels {have} do write it. It looks like the block was copied from a neighbouring channel and left unfinished",
     "param-channel-mismatch": "channel {ch} is fed from channel {other}: in call `{fb}` the parameter name says channel {ch}, but the signal comes from {other}",
-    "index-mismatch": "positions {p1} and {p2} match in {eq} of {total} lines in this group but differ here ({v1} vs {v2}) — the line was likely copied and renumbered only partially",
-    "self-enable": "the start permission `{cmd}` comes from `{fb}.{out}`, which within the same scan is a function of input `{inp}`, and that input is fed with the feedback `{sig}` of the same channel — the command never appears until the equipment runs, and it cannot start running without the command",
-    "timer-reset-by-own-condition": "timer `{timer}` runs on `{var}`, and `{var}` is cleared at line {rl} on every path of the same branch — on the next scan the input is already FALSE, the accumulated time is gone, and the delay lasts one task cycle instead of the setpoint",
-    "timer-reset.reduced": ". With a positive preset the output `{timer}.Q` is identically false, so the condition `{cond}` is equivalent to `{to}` — the timer affects nothing here",
-    "timer-rearmed-by-own-branch": "timer `{timer}` runs an off-delay on `{var}`, and `{var}` is re-armed at line {rl} on every path of the same branch — the count restarts every scan, the delay never expires, and the output is never released",
+    "index-mismatch": "positions {p1} and {p2} match in {eq} of {total} lines in this group but differ here ({v1} vs {v2}), so the line was likely copied and renumbered only partially",
+    "self-enable": "the start permission `{cmd}` comes from `{fb}.{out}`, which within the same scan is a function of input `{inp}`, and that input is fed with the feedback `{sig}` of the same channel. The command never appears until the equipment runs, and it cannot start running without the command",
+    "timer-reset-by-own-condition": "timer `{timer}` runs on `{var}`, and `{var}` is cleared at line {rl} on every path of the same branch. On the next scan the input is already FALSE, the accumulated time is gone, and the delay lasts one task cycle instead of the setpoint",
+    "timer-reset.reduced": ". With a positive preset the output `{timer}.Q` is identically false, so the condition `{cond}` is equivalent to `{to}`, and the timer affects nothing here",
+    "timer-rearmed-by-own-branch": "timer `{timer}` runs an off-delay on `{var}`, and `{var}` is re-armed at line {rl} on every path of the same branch. The count restarts every scan, the delay never expires, and the output is never released",
     "timer-off-delay-in-own-branch": "timer `{timer}` is an off-delay, yet every call to it sits inside a branch that requires `{var}`: once `{var}` is dropped there is no call at all, so the delay never starts counting",
-    "fb-call-overwritten": "instance `{timer}` is called twice in a row: at line {fl} with input `{first}`, then with input `{second}` — only the second one reaches the timer, the first call does nothing",
+    "fb-call-overwritten": "instance `{timer}` is called twice in a row: at line {fl} with input `{first}`, then with input `{second}`. Both calls run in the same scan, and the second immediately overwrites the state left by the first; if a restart is intended, the first call passes `IN := FALSE`, and the rule leaves that form alone",
     "edge-lost-in-own-branch": "instance `{edge}` ({type}) has an edge input and is only called inside a branch that requires `{var}`: it never sees the input go down, its memory stays latched, and every edge after the first is lost",
-    "fb-preset-missing": "instance `{timer}` of type {type} has no preset in the call, no field assignment and no initial value — PT stays at zero, so the output appears in the same scan as the input",
+    "fb-preset-missing": "instance `{timer}` of type {type} has no preset in the call, no field assignment and no initial value, so PT stays at zero and the output appears in the same scan as the input",
     "always-false-condition": "{what} is always {val} once same-scan values are substituted: {steps}",
-    "signal-without-source": "`{var}` is read in conditions ({readers}), but no line of code and no module channel ever writes it — the signal stays at zero forever and the protection never fires",
+    "signal-without-source": "`{var}` is read in conditions ({readers}), but no line of code and no module channel ever writes it, so the signal stays at zero forever and the protection never fires",
     "unsigned-vs-zero": "`{var} : {type}` is unsigned, so the comparison against zero is always {val} and the branch never runs",
-    "signal-without-source.confirmed": "`{var}` is read ({readers}), but nothing writes it — no line of code, no module channel and no screen element. There is no source at all: the signal stays at zero forever and the protection never fires",
-    "channel-sensor-off": "on module `{dev}` the channel is wired to a variable, but no sensor type is selected (\"off\"): `{par}` — the channel is not digitised and the variable stays at zero, which for an outdoor temperature looks plausible",
-    "channel-output-off": "on module `{dev}` the output is bound to a variable, but no output signal type is selected: `{par}` — the command goes nowhere and the actuator does not move",
-    "module-disabled": "module `{dev}` is excluded from polling (`{par}` = TRUE) — all of its inputs and outputs are dead and the program keeps working with stale values",
-    "visu-two-labels": "on screen `{screen}` the variable `{var}` is displayed under different captions: {extra} — the element was most likely copied without fixing its binding",
-    "visu-index-mismatch": "on screen `{screen}` the caption \"{extra}\" sits next to `{var}` — the number in the caption does not match the variable index",
+    "signal-without-source.confirmed": "`{var}` is read ({readers}), but nothing writes it: no line of code, no module channel and no screen element. There is no source at all: the signal stays at zero forever and the protection never fires",
+    "write-series-outlier": "{n} writes of the same shape go to `{buf}[{rng}]` while the whole series around them writes to `{main}`: the numbering of `{main}` stops at {below} and resumes at {above}, so the hole is exactly here. It looks like lines copied from the neighbouring block without renaming the buffer: those cells of `{main}` are never filled, and values in `{buf}` get overwritten",
+    "array-write-overlap": "`{fn}` writes {w} words per call through `ADR({buf}[…])`, and cells {cells} of the same array are also written by `{other}` (line {l2}). Whichever runs later in the scan is what the receiver gets; the other value is lost",
+    "param-family-outlier": "in the call to `{fb}` parameter `{formal}` receives `{val}`, while the other arguments of this call come from the `{fam}` family ({n} of them). The call's own value with the same tail exists in the project: `{cand}`. While both settings are equal nothing shows; once one of them is tuned, this unit runs on the other one's value",
+    "output-stuck-outside-modes": "an `IF … ELSIF …` chain of {k} branches with no ELSE: {outs} is switched on and off in every branch and touched nowhere else. When no condition holds (sensor fault, third selector position), the output keeps its last state: if an open command was active, the relay stays energised",
+    "for-unsigned-minus-one": "`{x}` is declared {type}: with {x} = 0 the bound `{x} - 1` wraps to the type's maximum and the loop over `{i}` runs tens of thousands of times per scan; the project has no `{x} > 0` check",
+    "for-unsigned-minus-one.arr": ". The counter indexes `{arr}[{i}]`, so reads and writes go beyond the array's bounds",
+    "buffer-window-overrun": "`{fb}` gets the start of `{buf}` shifted by `{off}` but the full `SIZEOF({buf})` as size: the window runs past the end of the array by the shift. The last registers read a neighbouring variable, and a master write will corrupt it",
+    "heating-dhw-fault-opens": "in the branch that runs on a sensor fault (chain condition, line {l0}: `{cond}`), output `{out}` is set TRUE, driving the DHW valve open. That is safe for space heating; for DHW it means full heat with no control, overheated water at the tap and a scalding risk. Confirm with the process engineer which position is safe for this valve",
+    "channel-sensor-off": "on module `{dev}` the channel is wired to a variable, but no sensor type is selected (\"off\"): `{par}`, so the channel is not digitised and the variable stays at zero, which for an outdoor temperature looks plausible",
+    "channel-output-off": "on module `{dev}` the output is bound to a variable, but no output signal type is selected: `{par}`, so the command goes nowhere and the actuator does not move",
+    "module-disabled": "module `{dev}` is excluded from polling (`{par}` = TRUE), so all of its inputs and outputs are dead and the program keeps working with stale values",
+    "visu-two-labels": "on screen `{screen}` the variable `{var}` is displayed under different captions: {extra}. The element was most likely copied without fixing its binding",
+    "visu-index-mismatch": "on screen `{screen}` the caption \"{extra}\" sits next to `{var}`, and the number in the caption does not match the variable index",
     "plcopen-naming": "{n} names off PLCopen: {ex}{more}",
     "cfc-div-zero": "the divisor of the {op} block is wired to a literal 0 → a guaranteed division by zero",
 },

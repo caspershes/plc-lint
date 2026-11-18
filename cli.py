@@ -15,7 +15,8 @@ PLC Lint — локальная проверка экспорта PLCopenXML. Ф
 Примеры:
     plc-lint project.xml                  отчёт в консоль + HTML рядом с файлом
     plc-lint *.xml --no-html              только консоль, пакетом
-    plc-lint p.xml --json > report.json   машинный вывод для CI
+    plc-lint p.xml --json > report.json   машинный вывод для CI, файлов не пишет
+    plc-lint p.xml --json --html          JSON и HTML рядом с файлом
     plc-lint p.xml --fail-on high         код возврата 1, если есть высокие
     plc-lint p.xml --profile heating      отраслевой профиль (heating, plcopen-naming)
 
@@ -259,36 +260,59 @@ def expand(paths):
     return out
 
 
+_HTML_BESIDE = ""      # --html без значения: отчёт рядом с каждым входным файлом
+
+
 def main(argv=None):
     global COLOR
     _fix_console_encoding()
     argv = list(sys.argv[1:] if argv is None else argv)
     dragged = sys.platform == "win32" and len(argv) == 1 and not argv[0].startswith("-")
 
-    ap = argparse.ArgumentParser(
-        prog="plc-lint", description="Локальная проверка экспорта PLCopenXML или CODESYS .export. "
-                                     "Файл никуда не отправляется — программа не выходит в сеть.")
-    ap.add_argument("files", nargs="*", help="файлы .xml/.export, маски или каталоги")
-    ap.add_argument("--lang", choices=("ru", "en"), default=None, help="язык отчёта")
+    # язык нужен уже для справки, поэтому определяется до разбора аргументов
+    lang = next((argv[i + 1] for i, a in enumerate(argv[:-1]) if a == "--lang"
+                 and argv[i + 1] in ("ru", "en")), None) \
+        or next((a.split("=", 1)[1] for a in argv if a in ("--lang=ru", "--lang=en")), None) \
+        or ("ru" if (os.environ.get("LANG", "") + os.environ.get("LANGUAGE", "")).lower().startswith("ru")
+            or sys.platform == "win32" and _win_is_russian() else "en")
+
+    def H(key):
+        return i18n.t("cli." + key, lang)
+
+    ap = argparse.ArgumentParser(prog="plc-lint", description=H("desc"))
+    ap.add_argument("files", nargs="*", help=H("files"))
+    ap.add_argument("--lang", choices=("ru", "en"), default=None, help=H("lang"))
     ap.add_argument("--profile", action="append", choices=PROFILES, default=[],
-                    help="дополнительный профиль правил (можно повторять)")
-    ap.add_argument("--html", metavar="PATH", help="куда сохранить HTML (по умолчанию рядом с файлом)")
-    ap.add_argument("--no-html", action="store_true", help="не сохранять HTML")
-    ap.add_argument("--open", dest="open_", action="store_true", help="открыть HTML в браузере")
-    ap.add_argument("--json", action="store_true", help="машинный вывод в stdout")
+                    help=H("profile"))
+    # Без значения — рядом с каждым входом. Так GitHub Action просит HTML вместе
+    # с --json: раньше HTML появлялся рядом с входом сам, и в «только чтение»
+    # каталог проекта менялся без спроса.
+    ap.add_argument("--html", metavar="PATH", nargs="?", const=_HTML_BESIDE, help=H("html"))
+    ap.add_argument("--no-html", action="store_true", help=H("no_html"))
+    ap.add_argument("--open", dest="open_", action="store_true", help=H("open"))
+    ap.add_argument("--json", action="store_true", help=H("json"))
     ap.add_argument("--fail-on", choices=("high", "medium", "low", "none"), default="none",
-                    help="вернуть код 1, если есть находки такого уровня и выше (для CI)")
-    ap.add_argument("--quiet", "-q", action="store_true", help="только заголовки находок")
-    ap.add_argument("--no-color", action="store_true", help="без ANSI-цветов")
+                    help=H("fail_on"))
+    ap.add_argument("--quiet", "-q", action="store_true", help=H("quiet"))
+    ap.add_argument("--no-color", action="store_true", help=H("no_color"))
     ap.add_argument("--version", action="version", version=f"PLC Lint {VERSION} (локальная версия)")
     args = ap.parse_args(argv)
+
+    # `plc-lint --html p.xml`: argparse отдал файл в значение --html. Вход
+    # перезаписывать отчётом нельзя — возвращаем его в список файлов.
+    if args.html and args.html is not _HTML_BESIDE and not args.files \
+            and os.path.splitext(args.html)[1].lower() in (".xml", ".export") \
+            and os.path.exists(args.html):
+        args.files, args.html = [args.html], _HTML_BESIDE
 
     if not args.files:
         ap.print_help()
         return EXIT_ERROR
 
-    lang = args.lang or ("ru" if (os.environ.get("LANG", "") + os.environ.get("LANGUAGE", "")).lower().startswith("ru")
-                         or sys.platform == "win32" and _win_is_russian() else "en")
+    lang = args.lang or lang
+    # HTML пишется по умолчанию в обычном прогоне; машинный вывод (--json) файлов
+    # не создаёт, пока HTML не попросили явно.
+    want_html = not args.no_html and (args.html is not None or not args.json)
     COLOR = not args.no_color and not args.json and _enable_ansi()
 
     files = expand(args.files)
@@ -328,9 +352,9 @@ def main(argv=None):
         if not args.json:
             print_report(report, path, lang, quiet=args.quiet)
 
-        if not args.no_html:
-            dst = args.html if (args.html and len(files) == 1) else \
-                os.path.splitext(path)[0] + "-report.html"
+        if want_html:
+            dst = args.html if (args.html and args.html is not _HTML_BESIDE and len(files) == 1) \
+                else os.path.splitext(path)[0] + "-report.html"
             try:
                 with open(dst, "w", encoding="utf-8") as fh:
                     fh.write(render_html(report, path, lang))

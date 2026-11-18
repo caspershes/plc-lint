@@ -97,8 +97,9 @@ runs:
           [ -n "$p" ] && profile_flags="$profile_flags --profile $p"
         done
 
+        # с --json CLI файлов не пишет; HTML рядом с каждым экспортом — только по запросу
         html_flag="--no-html"
-        [ "$INPUT_HTML" = "true" ] && html_flag=""
+        [ "$INPUT_HTML" = "true" ] && html_flag="--html"
 
         json="$RUNNER_TEMP/plc-lint.json"
 
